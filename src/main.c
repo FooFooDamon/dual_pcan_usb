@@ -22,16 +22,21 @@
 #include "versions.h"
 #include "common.h"
 #include "klogging.h"
+#include "usb_driver.h"
 
 static __init int pcan_init(void)
 {
-    pr_notice("Initialized %s-%s.%s for Linux-%#x.\n", DEV_NAME, DRIVER_VERSION, __VER__, LINUX_VERSION_CODE);
+    int ret = usbdrv_register();
 
-    return 0;
+    if (0 == ret)
+        pr_notice("Initialized %s-%s.%s for Linux-%#x.\n", DEV_NAME, DRIVER_VERSION, __VER__, LINUX_VERSION_CODE);
+
+    return ret;
 }
 
 static __exit void pcan_exit(void)
 {
+    usbdrv_unregister();
     pr_notice("Destroyed %s-%s.%s.\n", DEV_NAME, DRIVER_VERSION, __VER__);
 }
 
@@ -48,5 +53,8 @@ MODULE_AUTHOR("Man Hung-Coeng <udc577@126.com>");
  *
  * >>> 2023-07-19, Man Hung-Coeng <udc577@126.com>:
  *  01. Create.
+ *
+ * >>> 2023-09-03, Man Hung-Coeng <udc577@126.com>:
+ *  01. Implement registration and deregistration of USB driver.
  */
 

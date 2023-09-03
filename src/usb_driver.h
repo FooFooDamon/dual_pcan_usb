@@ -1,5 +1,5 @@
 /*
- * Common stuff used by both driver and app.
+ * Structures and declarations of USB submodule of PCAN-USB.
  *
  * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
  *
@@ -16,33 +16,23 @@
  * limitations under the License.
 */
 
-#ifndef __COMMON_H__
-#define __COMMON_H__
+#ifndef __USB_DRIVER_H__
+#define __USB_DRIVER_H__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+struct usb_driver;
 
-#define DEV_NAME                "dual_pcan_usb"
-#define DEV_MINOR_BASE          32
-#define VENDOR_ID               0x0c72
-#define PRODUCT_ID              0x000c
+int usbdrv_register(void);
 
-#ifdef __cplusplus
-}
-#endif
+void usbdrv_unregister(void);
 
-#endif /* #ifndef __COMMON_H__ */
+#endif /* #ifndef __USB_DRIVER_H__ */
 
 /*
  * ================
  *   CHANGE LOG
  * ================
  *
- * >>> 2023-07-19, Man Hung-Coeng <udc577@126.com>:
- *  01. Create.
- *
  * >>> 2023-09-03, Man Hung-Coeng <udc577@126.com>:
- *  01. Add DEV_MINOR_BASE, VENDOR_ID, PRODUCT_ID.
+ *  01. Create.
  */
 

@@ -38,7 +38,7 @@ EVAL_VERSION_ONCE := Y
 
 # export CROSS_KERNEL_DIR := ${HOME}/src/linux
 export DRVNAME := dual_pcan_usb
-export ${DRVNAME}-objs := main.o
+export ${DRVNAME}-objs := main.o usb_driver.o
 # NOTE: DO NOT modify or comment out obj-m!
 #       It's defined outside linux_driver.mk to solve a weird problem!
 export obj-m := ${DRVNAME}.o
@@ -154,13 +154,4 @@ init: pre-init chkout-exec post-init
 #
 
 # FIXME: More rules if needed ...
-
-#
-# ================
-#   CHANGE LOG
-# ================
-#
-# >>> 2023-07-19, Man Hung-Coeng <udc577@126.com>:
-#   01. Create.
-#
 
