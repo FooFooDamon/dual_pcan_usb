@@ -85,7 +85,6 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     struct usb_host_interface *intf = interface->cur_altsetting;
     int i;
 
-    return err;
     if (NULL == (netdev = alloc_candev(sizeof(usb_forwarder_t), PCAN_USB_MAX_TX_URBS)))
     {
         pr_err_v("alloc_candev() failed\n");
