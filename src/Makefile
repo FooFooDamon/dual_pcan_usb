@@ -44,7 +44,7 @@ export ${DRVNAME}-objs := main.o usb_driver.o
 export obj-m := ${DRVNAME}.o
 ccflags-y += -D__VER__=\"${__VER__}\"
 export APP_NAME := ${DRVNAME}
-export APP_OBJS := settings.o
+export APP_OBJS := setting_app.o
 
 -include ${THIRD_PARTY_DIR}/${LCS_ALIAS}/makefile/linux_driver.mk
 
