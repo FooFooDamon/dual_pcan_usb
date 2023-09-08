@@ -22,6 +22,7 @@
 #include <linux/usb.h>
 #include <linux/netdevice.h>
 #include <linux/can/dev.h>
+#include <linux/timer.h>
 
 #include "common.h"
 #include "klogging.h"
@@ -44,6 +45,7 @@ typedef struct usb_forwarder
     struct net_device *net_dev;
     struct usb_device *usb_dev;
     struct usb_interface *usb_intf;
+    struct timer_list restart_timer;
 } usb_forwarder_t;
 
 static struct usb_device_id s_usb_ids[] = {
@@ -77,13 +79,56 @@ void usbdrv_unregister(void)
     usb_deregister(&s_driver);
 }
 
-static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_device_id *id)
+static inline int check_endpoints(const struct usb_interface *interface)
 {
-    int err = -ENOMEM;
-    struct net_device *netdev = NULL;
-    usb_forwarder_t *forwarder = NULL;
     struct usb_host_interface *intf = interface->cur_altsetting;
     int i;
+
+    for (i = 0; i < intf->desc.bNumEndpoints; ++i)
+    {
+        struct usb_endpoint_descriptor *endpoint = &intf->endpoint[i].desc;
+
+        switch (endpoint->bEndpointAddress)
+        {
+        case PCAN_USB_EP_CMDOUT:
+        case PCAN_USB_EP_CMDIN:
+        case PCAN_USB_EP_MSGOUT:
+        case PCAN_USB_EP_MSGIN:
+            break;
+
+        default:
+            return -ENODEV;
+        }
+    }
+
+    return 0;
+}
+
+#ifdef setup_timer
+#pragma message("Using old style timer APIs.")
+static void pcan_usb_restart_callback(unsigned long arg)
+{
+    /*usb_forwarder_t *forwarder = (usb_forwarder_t *)arg;*/
+#else
+#pragma message("Using new style timer APIs.")
+static void pcan_usb_restart_callback(struct timer_list *timer)
+{
+    /*usb_forwarder_t *forwarder = container_of(timer, usb_forwarder_t, restart_timer);*/
+#endif
+
+    /*netif_wake_queue(forwarder->net_dev);*/
+}
+
+static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_device_id *id)
+{
+    struct net_device *netdev = NULL;
+    usb_forwarder_t *forwarder = NULL;
+    int err = check_endpoints(interface);
+
+    if (err)
+        return err;
+    else
+        err = -ENOMEM;
 
     if (NULL == (netdev = alloc_candev(sizeof(usb_forwarder_t), PCAN_USB_MAX_TX_URBS)))
     {
@@ -101,23 +146,11 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     forwarder->usb_dev = interface_to_usbdev(interface);
     forwarder->usb_intf = interface;
 
-    for (i = 0; i < intf->desc.bNumEndpoints; ++i)
-    {
-        struct usb_endpoint_descriptor *endpoint = &intf->endpoint[i].desc;
-
-        switch (endpoint->bEndpointAddress)
-        {
-        case PCAN_USB_EP_CMDOUT:
-        case PCAN_USB_EP_CMDIN:
-        case PCAN_USB_EP_MSGOUT:
-        case PCAN_USB_EP_MSGIN:
-            break;
-
-        default:
-            err = -ENODEV;
-            goto probe_failed;
-        }
-    }
+#ifdef setup_timer
+    setup_timer(&forwarder->restart_timer, pcan_usb_restart_callback, (unsigned long)forwarder);
+#else
+    timer_setup(&forwarder->restart_timer, pcan_usb_restart_callback, /* flags = */0);
+#endif
 
     usb_set_intfdata(interface, forwarder);
 
@@ -125,12 +158,14 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
 
     return 0;
 
+#if 0
 probe_failed:
 
     /*unregister_candev(netdev);*/
     free_candev(netdev);
 
     return err;
+#endif
 }
 
 static void pcan_usb_plugout(struct usb_interface *interface)
