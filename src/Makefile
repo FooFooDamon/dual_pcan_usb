@@ -38,7 +38,7 @@ EVAL_VERSION_ONCE := Y
 
 # export CROSS_KERNEL_DIR := ${HOME}/src/linux
 export DRVNAME := dual_pcan_usb
-export ${DRVNAME}-objs := main.o usb_driver.o
+export ${DRVNAME}-objs := main.o usb_driver.o can_commands.o
 # NOTE: DO NOT modify or comment out obj-m!
 #       It's defined outside linux_driver.mk to solve a weird problem!
 export obj-m := ${DRVNAME}.o
