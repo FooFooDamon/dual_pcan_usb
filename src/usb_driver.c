@@ -1,5 +1,5 @@
 /*
- * Implementation of USB submodule of PCAN-USB..
+ * Implementation of USB submodule of PCAN-USB.
  *
  * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
  *
@@ -27,6 +27,7 @@
 #include "common.h"
 #include "klogging.h"
 #include "can_commands.h"
+#include "netdev_interfaces.h"
 
 #ifndef KBUILD_MODNAME
 #define KBUILD_MODNAME                  DEV_NAME
@@ -120,20 +121,20 @@ static inline int check_endpoints(const struct usb_interface *interface)
 #pragma message("Using old style timer APIs.")
 static void pcan_usb_restart_callback(unsigned long arg)
 {
-    /*usb_forwarder_t *forwarder = (usb_forwarder_t *)arg;*/
+    usb_forwarder_t *forwarder = (usb_forwarder_t *)arg;
 #else
 #pragma message("Using new style timer APIs.")
 static void pcan_usb_restart_callback(struct timer_list *timer)
 {
-    /*usb_forwarder_t *forwarder = container_of(timer, usb_forwarder_t, restart_timer);*/
+    usb_forwarder_t *forwarder = container_of(timer, usb_forwarder_t, restart_timer);
 #endif
 
-    /*netif_wake_queue(forwarder->net_dev);*/
+    netdev_wake_up(forwarder->net_dev);
 }
 
 static int pcan_usb_reset_bus(usb_forwarder_t *forwarder, unsigned char is_on)
 {
-    int err = pcan_set_bus(forwarder, is_on);
+    int err = pcan_cmd_set_bus(forwarder, is_on);
 
     if (err)
         return err;
@@ -150,11 +151,22 @@ static int pcan_usb_reset_bus(usb_forwarder_t *forwarder, unsigned char is_on)
     return err;
 }
 
+static int set_can_bittiming(struct net_device *dev)
+{
+    usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(dev);
+    int err = pcan_cmd_set_bittiming(forwarder, &forwarder->can.bittiming);
+
+    if (err)
+        pr_err_v("couldn't set bitrate (err %d)\n", err);
+
+    return err;
+}
+
 static int check_device_info(usb_forwarder_t *forwarder)
 {
     u32 serial_number = 0;
     u32 device_id = 0;
-    int err = pcan_get_serial_number(forwarder, &serial_number);
+    int err = pcan_cmd_get_serial_number(forwarder, &serial_number);
 
     if (err < 0)
     {
@@ -164,7 +176,7 @@ static int check_device_info(usb_forwarder_t *forwarder)
     else
         dev_notice(&forwarder->usb_dev->dev, "Got serial number: 0x%08X\n", serial_number);
 
-    if ((err = pcan_get_device_id(forwarder, &device_id)) < 0)
+    if ((err = pcan_cmd_get_device_id(forwarder, &device_id)) < 0)
         pr_err_v("Unable to read device id, err = %d\n", err);
     else
         dev_notice(&forwarder->usb_dev->dev, "Got device id: %u\n", device_id);
@@ -202,6 +214,12 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     forwarder->usb_dev = interface_to_usbdev(interface);
     forwarder->usb_intf = interface;
     forwarder->state |= PCAN_USB_STATE_CONNECTED;
+
+    forwarder->can.clock = *get_fixed_can_clock();
+    forwarder->can.bittiming_const = get_can_bittiming_const();
+    forwarder->can.do_set_bittiming = set_can_bittiming;
+    forwarder->can.do_set_mode = netdev_set_can_mode;
+    forwarder->can.ctrlmode_supported = CAN_CTRLMODE_3_SAMPLES | CAN_CTRLMODE_LISTENONLY;
 
     /* TODO: register_candev() */
 
@@ -261,5 +279,8 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *  02. Add usbdrv_bulk_msg_{send,recv}() and pcan_usb_reset_bus().
  *  03. Add device state management, CAN command buffer management
  *      and device info checking.
+ *
+ * >>> 2023-09-16, Man Hung-Coeng <udc577@126.com>:
+ *  01. Do CAN private settings.
  */
 

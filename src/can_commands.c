@@ -1,5 +1,5 @@
 /*
- * Implementation of CAN command interfaces.
+ * Implementation of CAN command interfaces of PCAN-USB.
  *
  * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
  *
@@ -33,6 +33,20 @@ enum pcan_cmd_arg_index
 #define PCAN_CMD_ARGS_LEN           14
 #define PCAN_CMD_TOTAL_LEN          (PCAN_CMD_ARG_INDEX_ARG + PCAN_CMD_ARGS_LEN)
 
+void pcan_fill_command_buffer(u8 functionality, u8 number, const void *args_ptr, u8 args_len, void *buf)
+{
+    char *p = (char *)buf;
+
+    if (args_len > PCAN_CMD_ARGS_LEN)
+        args_len = PCAN_CMD_ARGS_LEN;
+
+    memset(p, 0, args_len + PCAN_CMD_ARG_INDEX_ARG);
+    p[PCAN_CMD_ARG_INDEX_FUNC] = functionality;
+    p[PCAN_CMD_ARG_INDEX_NUM] = number;
+    if (NULL != args_ptr)
+        memcpy(p + PCAN_CMD_ARG_INDEX_ARG, args_ptr, args_len);
+}
+
 int pcan_oneway_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_holder)
 {
     u8 *buf = forwarder->cmd_buf; /* TODO: Should be allocated at each call? */
@@ -47,10 +61,8 @@ int pcan_oneway_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_
     }
 
     /* TODO: Is a lock needed for the only cmd_buf? */
-    buf[PCAN_CMD_ARG_INDEX_FUNC] = cmd_holder->functionality;
-    buf[PCAN_CMD_ARG_INDEX_NUM] = cmd_holder->number;
-    if (NULL != cmd_holder->args)
-        memcpy(buf + PCAN_CMD_ARG_INDEX_ARG, cmd_holder->args, PCAN_CMD_ARGS_LEN);
+
+    pcan_fill_command_buffer(cmd_holder->functionality, cmd_holder->number, cmd_holder->args, PCAN_CMD_ARGS_LEN, buf);
 
     if ((err = usbdrv_bulk_msg_send(forwarder, buf, PCAN_CMD_TOTAL_LEN)) < 0)
         pr_err_v("sending cmd f=0x%x n=0x%x failure: %d\n", cmd_holder->functionality, cmd_holder->number, err);
@@ -104,29 +116,47 @@ CMD_END:
     }; \
     return pcan_oneway_command(fwd, &cmd_holder)
 
-int pcan_set_sja1000(struct usb_forwarder *forwarder, u8 mode)
+void pcan_fill_cmdbuf_for_setting_sja1000(u8 mode, void *buf)
+{
+    pcan_fill_command_buffer(9, 2, &mode, sizeof(mode) + 1, buf);
+}
+
+int pcan_cmd_set_sja1000(struct usb_forwarder *forwarder, u8 mode)
 {
     __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, 9, 2, 1, mode);
 }
 
-int pcan_set_bus(struct usb_forwarder *forwarder, u8 is_on)
+void pcan_fill_cmdbuf_for_setting_bus(u8 is_on, void *buf)
+{
+    pcan_fill_command_buffer(3, 2, &is_on, sizeof(is_on) + 0, buf);
+}
+
+int pcan_cmd_set_bus(struct usb_forwarder *forwarder, u8 is_on)
 {
     __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, 3, 2, 0, !!is_on);
 }
 
-int pcan_set_silent(struct usb_forwarder *forwarder, u8 is_on)
+void pcan_fill_cmdbuf_for_setting_silent(u8 is_on, void *buf)
+{
+    pcan_fill_command_buffer(3, 3, &is_on, sizeof(is_on) + 0, buf);
+}
+
+int pcan_cmd_set_silent(struct usb_forwarder *forwarder, u8 is_on)
 {
     __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, 3, 3, 0, !!is_on);
 }
 
-int pcan_set_ext_vcc(struct usb_forwarder *forwarder, u8 is_on)
+void pcan_fill_cmdbuf_for_setting_ext_vcc(u8 is_on, void *buf)
+{
+    pcan_fill_command_buffer(10, 2, &is_on, sizeof(is_on) + 0, buf);
+}
+
+int pcan_cmd_set_ext_vcc(struct usb_forwarder *forwarder, u8 is_on)
 {
     __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, 10, 2, 0, !!is_on);
 }
 
-struct can_bittiming;
-
-int pcan_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt)
+int pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt)
 {
     u8 args[PCAN_CMD_ARGS_LEN] = { 0 };
     pcan_cmd_holder_t cmd_holder = {
@@ -150,7 +180,12 @@ int pcan_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt
     return pcan_oneway_command(forwarder, &cmd_holder);
 }
 
-int pcan_get_serial_number(struct usb_forwarder *forwarder, u32 *serial_number)
+void pcan_fill_cmdbuf_for_getting_serial_number(void *buf)
+{
+    pcan_fill_command_buffer(6, 1, NULL, 0, buf);
+}
+
+int pcan_cmd_get_serial_number(struct usb_forwarder *forwarder, u32 *serial_number)
 {
     u8 result[PCAN_CMD_ARGS_LEN] = { 0 };
     pcan_cmd_holder_t cmd_holder = {
@@ -173,7 +208,12 @@ int pcan_get_serial_number(struct usb_forwarder *forwarder, u32 *serial_number)
     return err;
 }
 
-int pcan_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
+void pcan_fill_cmdbuf_for_getting_device_id(void *buf)
+{
+    pcan_fill_command_buffer(4, 1, NULL, 0, buf);
+}
+
+int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
 {
     u8 result[PCAN_CMD_ARGS_LEN] = { 0 };
     pcan_cmd_holder_t cmd_holder = {
@@ -198,5 +238,9 @@ int pcan_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
  *
  * >>> 2023-09-11, Man Hung-Coeng <udc577@126.com>:
  *  01. Create.
+ *
+ * >>> 2023-09-16, Man Hung-Coeng <udc577@126.com>:
+ *  01. Rename pcan_{set,get}_*() to pcan_cmd_{set,get}_*().
+ *  02. Add pcan_fill_*().
  */
 
