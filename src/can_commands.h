@@ -21,6 +21,13 @@
 
 #include <linux/types.h> /* For u8, u32, etc. */
 
+enum pcan_cmd_arg_index
+{
+    PCAN_CMD_ARG_INDEX_FUNC =       0
+    , PCAN_CMD_ARG_INDEX_NUM =      1
+    , PCAN_CMD_ARG_INDEX_ARG =      2
+};
+
 typedef struct pcan_cmd_holder
 {
     u8 functionality;
@@ -82,5 +89,8 @@ int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id);
  * >>> 2023-09-16, Man Hung-Coeng <udc577@126.com>:
  *  01. Rename pcan_{set,get}_*() to pcan_cmd_{set,get}_*().
  *  02. Add pcan_fill_*().
+ *
+ * >>> 2023-09-20, Man Hung-Coeng <udc577@126.com>:
+ *  01. Make definition of enum pcan_cmd_arg_index public.
  */
 

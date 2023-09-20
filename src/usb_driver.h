@@ -23,6 +23,8 @@
 #include <linux/netdevice.h> /* Same as above. */
 #include <linux/can/dev.h> /* struct can_priv */
 
+#include "packet_codec.h"
+
 #define PCAN_USB_STATE_CONNECTED            ((u8)0x01)
 #define PCAN_USB_STATE_STARTED              ((u8)0x02)
 
@@ -34,6 +36,7 @@ typedef struct usb_forwarder
     struct net_device *net_dev;
     u8 *cmd_buf;
     struct timer_list restart_timer;
+    struct pcan_time_ref time_ref;
     u8 state;
 } usb_forwarder_t;
 
@@ -59,5 +62,8 @@ int usbdrv_bulk_msg_recv(usb_forwarder_t *forwarder, void *data, int len);
  *  01. Make struct usb_forwarder a public structure,
  *      and add some CAN-setting-related fields to it.
  *  02. Add usbdrv_bulk_msg_{send,recv}().
+ *
+ * >>> 2023-09-20, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add a new field time_ref to struct usb_forwarder.
  */
 
