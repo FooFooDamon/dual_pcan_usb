@@ -21,7 +21,6 @@
 #include <linux/ktime.h>
 #include <linux/netdevice.h>
 #include <linux/can/dev.h>
-#include <linux/usb.h>
 
 #include "common.h"
 #include "klogging.h"

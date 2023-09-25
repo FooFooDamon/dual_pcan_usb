@@ -28,9 +28,11 @@ const struct can_clock* get_fixed_can_clock(void);
 
 const struct can_bittiming_const* get_can_bittiming_const(void);
 
-void netdev_wake_up(struct net_device *netdev);
+void pcan_net_wake_up(struct net_device *netdev);
 
-int netdev_set_can_mode(struct net_device *netdev, enum can_mode mode);
+int pcan_net_set_can_mode(struct net_device *netdev, enum can_mode mode);
+
+void pcan_net_set_ops(struct net_device *netdev);
 
 #endif /* #ifndef __NETDEV_INTERFACES_H__ */
 
@@ -41,5 +43,10 @@ int netdev_set_can_mode(struct net_device *netdev, enum can_mode mode);
  *
  * >>> 2023-09-16, Man Hung-Coeng <udc577@126.com>:
  *  01. Create.
+ *
+ * >>> 2023-09-25, Man Hung-Coeng <udc577@126.com>:
+ *  01. Rename netdev_wake_up() to pcan_net_wake_up(),
+ *      netdev_set_can_mode() to pcan_net_set_can_mode().
+ *  02. Add pcan_net_set_ops().
  */
 

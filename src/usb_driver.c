@@ -19,7 +19,6 @@
 #include "usb_driver.h"
 
 #include <linux/module.h>
-#include <linux/usb.h>
 #include <linux/netdevice.h>
 #include <linux/can/dev.h>
 #include <linux/timer.h>
@@ -33,15 +32,8 @@
 #define KBUILD_MODNAME                  DEV_NAME
 #endif
 
-#define PCAN_USB_EP_CMDOUT		        1
-#define PCAN_USB_EP_CMDIN		        (PCAN_USB_EP_CMDOUT | USB_DIR_IN)
-#define PCAN_USB_EP_MSGOUT		        2
-#define PCAN_USB_EP_MSGIN		        (PCAN_USB_EP_MSGOUT | USB_DIR_IN)
-
 #define PCAN_USB_MSG_TIMEOUT_MS         1000
 #define PCAN_USB_STARTUP_TIMEOUT_MS     10
-
-#define PCAN_USB_MAX_TX_URBS            10
 
 #define PCAN_USB_MAX_CMD_LEN            32
 
@@ -92,6 +84,55 @@ int usbdrv_bulk_msg_recv(usb_forwarder_t *forwarder, void *data, int len)
     );
 }
 
+int usbdrv_reset_bus(usb_forwarder_t *forwarder, unsigned char is_on)
+{
+    int err = pcan_cmd_set_bus(forwarder, is_on);
+
+    if (err)
+        return err;
+
+    if (is_on)
+    {
+        /* Need some time to finish initialization. */
+        set_current_state(TASK_INTERRUPTIBLE);
+        schedule_timeout(msecs_to_jiffies(PCAN_USB_STARTUP_TIMEOUT_MS));
+    }
+    else
+        err = pcan_init_sja1000(forwarder);
+
+    return err;
+}
+
+void usbdrv_unlink_all_urbs(usb_forwarder_t *forwarder)
+{
+    int i;
+
+    /* free all Rx (submitted) urbs */
+    usb_kill_anchored_urbs(&forwarder->anchor_rx_submitted);
+
+    /* free unsubmitted Tx urbs first */
+    for (i = 0; i < PCAN_USB_MAX_TX_URBS; ++i)
+    {
+        pcan_tx_urb_context_t *ctx = &forwarder->tx_contexts[i];
+
+        if (!ctx->urb || PCAN_USB_MAX_TX_URBS != ctx->echo_index)
+        {
+            /*
+             * this urb is already released or always submitted,
+             * let usb core free by itself
+             */
+            continue;
+        }
+
+        usb_free_urb(ctx->urb);
+        ctx->urb = NULL;
+    }
+
+    /* then free all submitted Tx urbs */
+    usb_kill_anchored_urbs(&forwarder->anchor_tx_submitted);
+    atomic_set(&forwarder->active_tx_urbs, 0);
+}
+
 static inline int check_endpoints(const struct usb_interface *interface)
 {
     struct usb_host_interface *intf = interface->cur_altsetting;
@@ -129,26 +170,7 @@ static void pcan_usb_restart_callback(struct timer_list *timer)
     usb_forwarder_t *forwarder = container_of(timer, usb_forwarder_t, restart_timer);
 #endif
 
-    netdev_wake_up(forwarder->net_dev);
-}
-
-static int pcan_usb_reset_bus(usb_forwarder_t *forwarder, unsigned char is_on)
-{
-    int err = pcan_cmd_set_bus(forwarder, is_on);
-
-    if (err)
-        return err;
-
-    if (is_on)
-    {
-        /* Need some time to finish initialization. */
-        set_current_state(TASK_INTERRUPTIBLE);
-        schedule_timeout(msecs_to_jiffies(PCAN_USB_STARTUP_TIMEOUT_MS));
-    }
-    else
-        err = pcan_init_sja1000(forwarder);
-
-    return err;
+    pcan_net_wake_up(forwarder->net_dev);
 }
 
 static int set_can_bittiming(struct net_device *dev)
@@ -188,6 +210,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
 {
     struct net_device *netdev = NULL;
     usb_forwarder_t *forwarder = NULL;
+    int i;
     int err = check_endpoints(interface);
 
     if (err)
@@ -200,7 +223,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     }
     SET_NETDEV_DEV(netdev,  &interface->dev); /* Set netdev's parent device. */
     netdev->flags |= IFF_ECHO; /* Support local echo. */
-    /* TODO: netdev_ops */
+    pcan_net_set_ops(netdev);
 
     forwarder = netdev_priv(netdev);
     memset(forwarder, 0, sizeof(*forwarder));
@@ -215,10 +238,18 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     forwarder->usb_intf = interface;
     forwarder->state |= PCAN_USB_STATE_CONNECTED;
 
+    init_usb_anchor(&forwarder->anchor_rx_submitted);
+    init_usb_anchor(&forwarder->anchor_tx_submitted);
+    atomic_set(&forwarder->active_tx_urbs, 0);
+    for (i = 0; i < PCAN_USB_MAX_TX_URBS; ++i)
+    {
+        forwarder->tx_contexts[i].echo_index = PCAN_USB_MAX_TX_URBS;
+    }
+
     forwarder->can.clock = *get_fixed_can_clock();
     forwarder->can.bittiming_const = get_can_bittiming_const();
     forwarder->can.do_set_bittiming = set_can_bittiming;
-    forwarder->can.do_set_mode = netdev_set_can_mode;
+    forwarder->can.do_set_mode = pcan_net_set_can_mode;
     forwarder->can.ctrlmode_supported = CAN_CTRLMODE_3_SAMPLES | CAN_CTRLMODE_LISTENONLY;
 
     /* TODO: register_candev() */
@@ -282,5 +313,12 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *
  * >>> 2023-09-16, Man Hung-Coeng <udc577@126.com>:
  *  01. Do CAN private settings.
+ *
+ * >>> 2023-09-25, Man Hung-Coeng <udc577@126.com>:
+ *  01. Remove macro PCAN_USB_EP_* and PCAN_USB_MAX_TX_URBS.
+ *  02. Rename pcan_usb_reset_bus() to usbdrv_reset_bus().
+ *  03. Add global function usbdrv_unlink_all_urbs(),
+ *      and add initialization of RX/TX URBs in pcan_usb_plugin().
+ *  04. Set net device op callbacks in pcan_usb_plugin().
  */
 

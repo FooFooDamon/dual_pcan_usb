@@ -18,8 +18,6 @@
 
 #include "can_commands.h"
 
-#include <linux/usb.h>
-
 #include "common.h"
 #include "klogging.h"
 #include "usb_driver.h"
