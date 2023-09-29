@@ -28,7 +28,7 @@ all: init
 
 
 LCS_ALIAS := lazy_coding
-THIRD_PARTY_DIR := $(abspath ../3rdpary)
+export THIRD_PARTY_DIR ?= $(abspath ../3rdpary)
 EVAL_VERSION_ONCE := Y
 
 -include ${THIRD_PARTY_DIR}/${LCS_ALIAS}/makefile/__ver__.mk
@@ -37,13 +37,13 @@ EVAL_VERSION_ONCE := Y
 
 
 # export CROSS_KERNEL_DIR := ${HOME}/src/linux
-export DRVNAME := dual_pcan_usb
-export ${DRVNAME}-objs := main.o usb_driver.o \
+export DRVNAME ?= dual_pcan_usb
+export ${DRVNAME}-objs ?= main.o usb_driver.o \
 	can_commands.o netdev_interfaces.o packet_codec.o
-# NOTE: DO NOT modify or comment out obj-m!
-#       It's defined outside linux_driver.mk to solve a weird problem!
-export obj-m := ${DRVNAME}.o
-ccflags-y += -D__VER__=\"${__VER__}\"
+ccflags-y += -I${THIRD_PARTY_DIR}/${LCS_ALIAS}/c_and_cpp/native # -D__FILE__=\"$(^F)\"
+ifeq (${ARCH},${HOST_ARCH})
+    ccflags-y += -Wno-builtin-macro-redefined
+endif
 export APP_NAME := ${DRVNAME}
 export APP_OBJS := setting_app.o
 

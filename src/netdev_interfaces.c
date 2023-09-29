@@ -27,6 +27,8 @@
 #include "packet_codec.h"
 #include "usb_driver.h"
 
+#define __FILE__                        "netdev_interfaces.c"
+
 #define PCAN_USB_CRYSTAL_HZ             16000000
 
 const struct can_clock* get_fixed_can_clock(void)
@@ -65,7 +67,7 @@ void pcan_net_wake_up(struct net_device *netdev)
 
 static inline void pcan_dump_mem(char *prompt, void *ptr, int len)
 {
-    pr_info("%s dumping %s (%d bytes):\n", DEV_NAME, (prompt ? prompt : "memory"), len);
+    pr_info("dumping %s (%d bytes):\n", (prompt ? prompt : "memory"), len);
     print_hex_dump(KERN_INFO, DEV_NAME " ", DUMP_PREFIX_NONE, 16, 1, ptr, len, false);
 }
 
@@ -73,7 +75,7 @@ int pcan_net_set_can_mode(struct net_device *netdev, enum can_mode mode)
 {
     int err = 0;
 
-    netdev_notice(netdev, "%s(%d)\n", __func__, mode);
+    netdev_notice_v(netdev, "%s(%d)\n", __func__, mode);
 
     switch (mode)
     {
@@ -109,8 +111,7 @@ static void usb_read_bulk_callback(struct urb *urb)
         return;
 
     default:
-        if(net_ratelimit())
-            pr_err_v("Rx urb aborted (%d)\n", urb->status);
+        netdev_err_ratelimited_v(netdev, "Rx urb aborted (%d)\n", urb->status);
         goto resubmit_urb;
     }
 
@@ -137,7 +138,7 @@ resubmit_urb:
     if (-ENODEV == err)
         netif_device_detach(netdev);
     else
-        pr_err_v("failed resubmitting read bulk urb: %d\n", err);
+        netdev_err_v(netdev, "failed resubmitting read bulk urb: %d\n", err);
 }
 
 static void usb_write_bulk_callback(struct urb *urb)
@@ -169,8 +170,7 @@ static void usb_write_bulk_callback(struct urb *urb)
         break;
 
     default:
-        if (net_ratelimit())
-            pr_warn_v("Tx urb aborted (%d)\n", urb->status);
+        netdev_err_ratelimited_v(netdev, "Tx urb aborted (%d)\n", urb->status);
         /* FIXME: fallthrough */
 
     case -EPROTO:
@@ -208,7 +208,7 @@ static int start_can_interface(struct net_device *netdev)
 
         if (NULL == urb)
         {
-            pr_err_v("No memory left for URBs\n");
+            netdev_err_v(netdev, "No memory left for URBs\n");
             err = -ENOMEM;
             break;
         }
@@ -246,12 +246,12 @@ static int start_can_interface(struct net_device *netdev)
 
     if (0 == i)
     {
-        pr_err_v("couldn't setup any rx URB\n");
+        netdev_err_v(netdev, "couldn't setup any rx URB\n");
         return err;
     }
 
     if (i < PCAN_USB_MAX_RX_URBS)
-        pr_warn_v("rx performance may be slow\n");
+        netdev_warn_v(netdev, "rx performance may be slow\n");
 
     /* allocate tx urbs */
     for (i = 0; i < PCAN_USB_MAX_TX_URBS; ++i)
@@ -262,7 +262,7 @@ static int start_can_interface(struct net_device *netdev)
 
         if (NULL == urb)
         {
-            pr_err_v("No memory left for URBs\n");
+            netdev_err_v(netdev, "No memory left for URBs\n");
             err = -ENOMEM;
             break;
         }
@@ -286,12 +286,12 @@ static int start_can_interface(struct net_device *netdev)
 
     if (0 == i)
     {
-        pr_err_v("couldn't setup any tx URB\n");
+        netdev_err_v(netdev, "couldn't setup any tx URB\n");
         goto lbl_kill_urbs;
     }
 
     if (i < PCAN_USB_MAX_TX_URBS)
-        pr_warn_v("tx performance may be slow\n");
+        netdev_warn_v(netdev, "tx performance may be slow\n");
 
     /* TODO: pcan_cmd_set_silent(), pcan_cmd_set_ext_vcc() */
     forwarder->state |= PCAN_USB_STATE_STARTED;
@@ -309,7 +309,7 @@ lbl_start_failed:
     if (-ENODEV == err)
         netif_device_detach(netdev);
 
-    pr_warn_v("couldn't submit control: %d\n", err);
+    netdev_warn_v(netdev, "couldn't submit control: %d\n", err);
 
     for (i = 0; i < PCAN_USB_MAX_TX_URBS; ++i)
     {
@@ -334,7 +334,7 @@ static int pcan_net_open(struct net_device *netdev)
     err = start_can_interface(netdev);
     if (err)
     {
-        pr_err_v("couldn't start device: %d\n", err);
+        netdev_err_v(netdev, "couldn't start device: %d\n", err);
         close_candev(netdev);
         return err;
     }
@@ -391,8 +391,7 @@ static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_devic
     err = pcan_encode_frame_to_buf(netdev, frame, obuf, &size);
     if (err)
     {
-        if (net_ratelimit())
-            pr_err_v("packet dropped\n");
+        netdev_err_ratelimited_v(netdev, "packet dropped\n");
 
         dev_kfree_skb(skb);
         ++stats->tx_dropped;
@@ -434,8 +433,7 @@ static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_devic
             break;
 
         default:
-            if (net_ratelimit())
-                pr_warn_v("tx urb submitting failed err=%d\n", err);
+            netdev_warn_ratelimited_v(netdev, "tx urb submitting failed err=%d\n", err);
             /* FIXME: fallthrough */
             /* __attribute__((fallthrough)); */
 
@@ -483,5 +481,8 @@ void pcan_net_set_ops(struct net_device *netdev)
  *  01. Rename netdev_wake_up() to pcan_net_wake_up(),
  *      netdev_set_can_mode() to pcan_net_set_can_mode().
  *  02. Add pcan_net_set_ops() and related net device op callbacks.
+ *
+ * >>> 2023-09-29, Man Hung-Coeng <udc577@126.com>:
+ *  01. Use logging APIs of 3rd-party klogging.h.
  */
 

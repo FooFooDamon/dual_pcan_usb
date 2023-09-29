@@ -28,9 +28,7 @@
 #include "can_commands.h"
 #include "netdev_interfaces.h"
 
-#ifndef KBUILD_MODNAME
-#define KBUILD_MODNAME                  DEV_NAME
-#endif
+#define __FILE__                        "usb_driver.c"
 
 #define PCAN_USB_MSG_TIMEOUT_MS         1000
 #define PCAN_USB_STARTUP_TIMEOUT_MS     10
@@ -179,7 +177,7 @@ static int set_can_bittiming(struct net_device *dev)
     int err = pcan_cmd_set_bittiming(forwarder, &forwarder->can.bittiming);
 
     if (err)
-        pr_err_v("couldn't set bitrate (err %d)\n", err);
+        netdev_err_v(dev, "couldn't set bitrate (err %d)\n", err);
 
     return err;
 }
@@ -191,17 +189,12 @@ static int check_device_info(usb_forwarder_t *forwarder)
     int err = pcan_cmd_get_serial_number(forwarder, &serial_number);
 
     if (err < 0)
-    {
-        pr_err_v("Unable to read serial number, err = %d\n", err);
         return err;
-    }
     else
-        dev_notice(&forwarder->usb_dev->dev, "Got serial number: 0x%08X\n", serial_number);
+        dev_notice_v(&forwarder->usb_dev->dev, "Got serial number: 0x%08X\n", serial_number);
 
-    if ((err = pcan_cmd_get_device_id(forwarder, &device_id)) < 0)
-        pr_err_v("Unable to read device id, err = %d\n", err);
-    else
-        dev_notice(&forwarder->usb_dev->dev, "Got device id: %u\n", device_id);
+    if (!(err = pcan_cmd_get_device_id(forwarder, &device_id)))
+        dev_notice_v(&forwarder->usb_dev->dev, "Got device id: %u\n", device_id);
 
     return err;
 }
@@ -218,7 +211,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
 
     if (NULL == (netdev = alloc_candev(sizeof(usb_forwarder_t), PCAN_USB_MAX_TX_URBS)))
     {
-        pr_err_v("alloc_candev() failed\n");
+        dev_err_v(&interface->dev, "alloc_candev() failed\n");
         return -ENOMEM;
     }
     SET_NETDEV_DEV(netdev,  &interface->dev); /* Set netdev's parent device. */
@@ -230,7 +223,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     if (NULL == (forwarder->cmd_buf = kmalloc(PCAN_USB_MAX_CMD_LEN, GFP_KERNEL)))
     {
         err = -ENOMEM;
-        pr_err_v("kmalloc() for cmd_buf failed\n");
+        dev_err_v(&interface->dev, "kmalloc() for cmd_buf failed\n");
         goto probe_failed;
     }
     forwarder->net_dev = netdev;
@@ -265,7 +258,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
 
     usb_set_intfdata(interface, forwarder);
 
-    dev_notice(&forwarder->usb_dev->dev, "New PCAN-USB device plugged in\n");
+    dev_notice_v(&interface->dev, "New PCAN-USB device plugged in\n");
 
     return 0;
 
@@ -293,7 +286,7 @@ static void pcan_usb_plugout(struct usb_interface *interface)
         kfree(forwarder->cmd_buf);
         free_candev(forwarder->net_dev);
         usb_set_intfdata(interface, NULL);
-        dev_notice(&forwarder->usb_dev->dev, "PCAN-USB device plugged out\n");
+        dev_notice_v(&interface->dev, "PCAN-USB device plugged out\n");
     }
 }
 
@@ -320,5 +313,8 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *  03. Add global function usbdrv_unlink_all_urbs(),
  *      and add initialization of RX/TX URBs in pcan_usb_plugin().
  *  04. Set net device op callbacks in pcan_usb_plugin().
+ *
+ * >>> 2023-09-29, Man Hung-Coeng <udc577@126.com>:
+ *  01. Use logging APIs of 3rd-party klogging.h.
  */
 

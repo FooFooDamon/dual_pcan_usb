@@ -27,6 +27,8 @@
 #include "can_commands.h"
 #include "usb_driver.h"
 
+#define __FILE__                            "packet_codec.c"
+
 #define PCAN_USB_MSG_HEADER_LEN		        2
 
 /* PCAN-USB USB message record status/len field */
@@ -411,11 +413,11 @@ static int decode_status_and_error(msg_context_t *ctx, u8 status_len)
 
     case PCAN_USB_REC_BUSEVT: /* error frame/bus event */
         if (number & PCAN_USB_ERROR_TXQFULL)
-            netdev_dbg(ctx->netdev, "device Tx queue full)\n");
+            netdev_debug_v(ctx->netdev, "device Tx queue full)\n");
         break;
 
     default:
-        pr_err_v("unexpected functionality %u\n", functionality);
+        netdev_err_v(ctx->netdev, "unexpected functionality %u\n", functionality);
         break;
     }
 
@@ -529,7 +531,7 @@ int pcan_decode_and_handle_urb(const struct urb *urb, struct net_device *dev)
         return 0;
     else
     {
-        pr_err_v("usb message length error (%u)\n", urb->actual_length);
+        netdev_err_v(dev, "usb message length error (%u)\n", urb->actual_length);
         return -EINVAL;
     }
 }
@@ -541,5 +543,8 @@ int pcan_decode_and_handle_urb(const struct urb *urb, struct net_device *dev)
  *
  * >>> 2023-09-20, Man Hung-Coeng <udc577@126.com>:
  *  01. Create.
+ *
+ * >>> 2023-09-29, Man Hung-Coeng <udc577@126.com>:
+ *  01. Use logging APIs of 3rd-party klogging.h.
  */
 

@@ -22,6 +22,8 @@
 #include "klogging.h"
 #include "usb_driver.h"
 
+#define __FILE__                    "can_commands.c"
+
 #define PCAN_CMD_ARGS_LEN           14
 #define PCAN_CMD_TOTAL_LEN          (PCAN_CMD_ARG_INDEX_ARG + PCAN_CMD_ARGS_LEN)
 
@@ -57,7 +59,10 @@ int pcan_oneway_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_
     pcan_fill_command_buffer(cmd_holder->functionality, cmd_holder->number, cmd_holder->args, PCAN_CMD_ARGS_LEN, buf);
 
     if ((err = usbdrv_bulk_msg_send(forwarder, buf, PCAN_CMD_TOTAL_LEN)) < 0)
-        pr_err_v("sending cmd f=0x%x n=0x%x failure: %d\n", cmd_holder->functionality, cmd_holder->number, err);
+    {
+        dev_err_v(&forwarder->usb_dev->dev, "sending cmd f=0x%x n=0x%x failure: %d\n",
+            cmd_holder->functionality, cmd_holder->number, err);
+    }
 
 CMD_END:
 
@@ -84,7 +89,10 @@ int pcan_responsive_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *
         goto CMD_END;
 
     if ((err = usbdrv_bulk_msg_recv(forwarder, buf, PCAN_CMD_TOTAL_LEN)) < 0)
-        pr_err_v("waiting reply f=0x%x n=0x%x failure: %d\n", cmd_holder->functionality, cmd_holder->number, err);
+    {
+        dev_err_v(&forwarder->usb_dev->dev, "waiting reply f=0x%x n=0x%x failure: %d\n",
+            cmd_holder->functionality, cmd_holder->number, err);
+    }
     else if (NULL != cmd_holder->result)
         memcpy(cmd_holder->result, buf + PCAN_CMD_ARG_INDEX_ARG, PCAN_CMD_ARGS_LEN);
     else
@@ -164,7 +172,7 @@ int pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming
     if (forwarder->can.ctrlmode & CAN_CTRLMODE_3_SAMPLES)
         btr1 |= 0x80;
 
-    dev_notice(&forwarder->usb_dev->dev, "setting BTR0=0x%02x BTR1=0x%02x\n", btr0, btr1);
+    netdev_notice_v(forwarder->net_dev, "setting BTR0=0x%02x BTR1=0x%02x\n", btr0, btr1);
 
     args[0] = btr1;
     args[1] = btr0;
@@ -188,7 +196,7 @@ int pcan_cmd_get_serial_number(struct usb_forwarder *forwarder, u32 *serial_numb
     int err = pcan_responsive_command(forwarder, &cmd_holder);
 
     if (err)
-        pr_err_v("getting serial failure: %d\n", err);
+        dev_err_v(&forwarder->usb_dev->dev, "getting serial number failure: %d\n", err);
     else
     {
         __le32 tmp32;
@@ -216,7 +224,7 @@ int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
     int err = pcan_responsive_command(forwarder, &cmd_holder);
 
     if (err)
-        pr_err_v("getting device id failure: %d\n", err);
+        dev_err_v(&forwarder->usb_dev->dev, "getting device id failure: %d\n", err);
     else
         *device_id = result[0];
 
@@ -237,5 +245,8 @@ int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
  *
  * >>> 2023-09-20, Man Hung-Coeng <udc577@126.com>:
  *  01. Put definition of enum pcan_cmd_arg_index into header file.
+ *
+ * >>> 2023-09-29, Man Hung-Coeng <udc577@126.com>:
+ *  01. Use logging APIs of 3rd-party klogging.h.
  */
 

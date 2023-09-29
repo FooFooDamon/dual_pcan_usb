@@ -8,6 +8,7 @@ flags = [
     , "-std=gnu89"
     , "-x", "c"
     , "-I", YCM_CONF_DIR
+    , "-I", os.path.join(YCM_CONF_DIR, "..", "3rdpary", "lazy_coding", "c_and_cpp", "native")
     , "-I", os.path.join(KERNEL_ROOT, "arch", "arm", "include")
     , "-I", os.path.join(KERNEL_ROOT, "arch", "arm", "include", "generated", "uapi")
     , "-I", os.path.join(KERNEL_ROOT, "arch", "arm", "include", "generated")
@@ -22,6 +23,7 @@ flags = [
     , "-Uarm"
     , "-DCC_HAVE_ASM_GOTO"
     , "-DMODULE"
+    , '-DKBUILD_MODNAME="dual_pcan_usb"'
 ]
 
 SOURCE_EXTENSIONS = [ ".c" ]
