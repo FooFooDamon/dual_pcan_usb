@@ -247,6 +247,9 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     if ((err = check_device_info(forwarder)) < 0)
         goto probe_failed;
 
+    if ((err = usbdrv_reset_bus(forwarder, /* is_on = */0)) < 0)
+        goto probe_failed;
+
 #ifdef setup_timer
     setup_timer(&forwarder->restart_timer, network_up_callback, (unsigned long)forwarder);
 #else
@@ -317,5 +320,6 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  * >>> 2023-10-01, Man Hung-Coeng <udc577@126.com>:
  *  01. Remove macro PCAN_USB_STARTUP_TIMEOUT_MS and PCAN_USB_MAX_CMD_LEN.
  *  02. Rename function pcan_usb_restart_callback() to network_up_callback().
+ *  03. Set CAN bus off within pcan_usb_plugin().
  */
 
