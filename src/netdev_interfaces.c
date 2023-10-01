@@ -212,6 +212,7 @@ static int start_can_interface(struct net_device *netdev)
 {
     usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(netdev);
     struct usb_device *usb_dev = forwarder->usb_dev;
+    u16 dev_revision = le16_to_cpu(usb_dev->descriptor.bcdDevice) >> 8;
     int err = 0;
     int i;
 
@@ -308,7 +309,11 @@ static int start_can_interface(struct net_device *netdev)
     if (i < PCAN_USB_MAX_TX_URBS)
         netdev_warn_v(netdev, "tx performance may be slow\n");
 
-    /* TODO: pcan_cmd_set_silent(), pcan_cmd_set_ext_vcc() */
+    /* TODO: Needed or not: memset(&forwarder->time_ref, 0, sizeof(forwarder->time_ref)); */
+    err = (dev_revision > 3) ? pcan_cmd_set_silent(forwarder, forwarder->can.ctrlmode & CAN_CTRLMODE_LISTENONLY) : 0;
+    if (err || (err = pcan_cmd_set_ext_vcc(forwarder, /* is_on = */0)))
+        goto lbl_start_failed;
+
     forwarder->state |= PCAN_USB_STATE_STARTED;
 
     err = usbdrv_reset_bus(forwarder, /* is_on = */1);
@@ -502,5 +507,6 @@ void pcan_net_set_ops(struct net_device *netdev)
  *
  * >>> 2023-10-01, Man Hung-Coeng <udc577@126.com>:
  *  01. Set CAN bus on within pcan_net_set_can_mode().
+ *  02. Set CAN silent mode and external VCC within start_can_interface().
  */
 
