@@ -31,9 +31,6 @@
 #define __FILE__                        "usb_driver.c"
 
 #define PCAN_USB_MSG_TIMEOUT_MS         1000
-#define PCAN_USB_STARTUP_TIMEOUT_MS     10
-
-#define PCAN_USB_MAX_CMD_LEN            32
 
 static struct usb_device_id s_usb_ids[] = {
     { USB_DEVICE(VENDOR_ID, PRODUCT_ID) }
@@ -158,12 +155,12 @@ static inline int check_endpoints(const struct usb_interface *interface)
 
 #ifdef setup_timer
 #pragma message("Using old style timer APIs.")
-static void pcan_usb_restart_callback(unsigned long arg)
+static void network_up_callback(unsigned long arg)
 {
     usb_forwarder_t *forwarder = (usb_forwarder_t *)arg;
 #else
 #pragma message("Using new style timer APIs.")
-static void pcan_usb_restart_callback(struct timer_list *timer)
+static void network_up_callback(struct timer_list *timer)
 {
     usb_forwarder_t *forwarder = container_of(timer, usb_forwarder_t, restart_timer);
 #endif
@@ -251,9 +248,9 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
         goto probe_failed;
 
 #ifdef setup_timer
-    setup_timer(&forwarder->restart_timer, pcan_usb_restart_callback, (unsigned long)forwarder);
+    setup_timer(&forwarder->restart_timer, network_up_callback, (unsigned long)forwarder);
 #else
-    timer_setup(&forwarder->restart_timer, pcan_usb_restart_callback, /* flags = */0);
+    timer_setup(&forwarder->restart_timer, network_up_callback, /* flags = */0);
 #endif
 
     usb_set_intfdata(interface, forwarder);
@@ -316,5 +313,9 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *
  * >>> 2023-09-29, Man Hung-Coeng <udc577@126.com>:
  *  01. Use logging APIs of 3rd-party klogging.h.
+ *
+ * >>> 2023-10-01, Man Hung-Coeng <udc577@126.com>:
+ *  01. Remove macro PCAN_USB_STARTUP_TIMEOUT_MS and PCAN_USB_MAX_CMD_LEN.
+ *  02. Rename function pcan_usb_restart_callback() to network_up_callback().
  */
 

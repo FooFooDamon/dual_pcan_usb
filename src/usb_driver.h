@@ -29,6 +29,8 @@
 #define PCAN_USB_STATE_CONNECTED            ((u8)0x01)
 #define PCAN_USB_STATE_STARTED              ((u8)0x02)
 
+#define PCAN_USB_STARTUP_TIMEOUT_MS         10
+
 #define PCAN_USB_MAX_TX_URBS                10
 #define PCAN_USB_MAX_RX_URBS                4
 
@@ -79,6 +81,14 @@ int usbdrv_reset_bus(usb_forwarder_t *forwarder, unsigned char is_on);
 
 void usbdrv_unlink_all_urbs(usb_forwarder_t *forwarder);
 
+static inline void usbdrv_default_completion(struct urb *urb)
+{
+    if (!(urb->transfer_flags & URB_FREE_BUFFER))
+        kfree(urb->transfer_buffer);
+
+    usb_free_urb(urb);
+}
+
 #endif /* #ifndef __USB_DRIVER_H__ */
 
 /*
@@ -100,5 +110,9 @@ void usbdrv_unlink_all_urbs(usb_forwarder_t *forwarder);
  * >>> 2023-09-25, Man Hung-Coeng <udc577@126.com>:
  *  01. Add URB-related fields (of usb_forwarder_t), structures and macros.
  *  02. Add function usbdrv_reset_bus() and usbdrv_unlink_all_urbs().
+ *
+ * >>> 2023-10-01, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add macro PCAN_USB_STARTUP_TIMEOUT_MS.
+ *  02. Add inline function usbdrv_default_completion().
  */
 

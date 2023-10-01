@@ -27,7 +27,7 @@
 #define PCAN_CMD_ARGS_LEN           14
 #define PCAN_CMD_TOTAL_LEN          (PCAN_CMD_ARG_INDEX_ARG + PCAN_CMD_ARGS_LEN)
 
-void pcan_fill_command_buffer(u8 functionality, u8 number, const void *args_ptr, u8 args_len, void *buf)
+static void pcan_fill_command_buffer(u8 functionality, u8 number, const void *args_ptr, u8 args_len, void *buf)
 {
     char *p = (char *)buf;
 
@@ -71,6 +71,33 @@ CMD_END:
     return err;
 }
 
+int pcan_oneway_command_async(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_holder)
+{
+    struct urb *urb = usb_alloc_urb(0, GFP_ATOMIC);
+    u8 *buf = urb ? kmalloc(PCAN_USB_MAX_CMD_LEN, GFP_ATOMIC) : NULL;
+    int err = buf ? 0 : -ENOMEM;
+
+    if (!err)
+    {
+        pcan_fill_command_buffer(cmd_holder->functionality, cmd_holder->number,
+            cmd_holder->args, PCAN_CMD_ARGS_LEN, buf);
+
+        usb_fill_bulk_urb(urb, forwarder->usb_dev, usb_sndbulkpipe(forwarder->usb_dev, PCAN_USB_EP_CMDOUT),
+            buf, PCAN_CMD_TOTAL_LEN, cmd_holder->complete_func, cmd_holder->context);
+
+        if (!(err = usb_submit_urb(urb, GFP_ATOMIC)))
+            return 0;
+    }
+
+    if (!urb)
+        usb_free_urb(urb);
+
+    if (!buf)
+        kfree(buf);
+
+    return err;
+}
+
 int pcan_responsive_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_holder)
 {
     u8 *buf = forwarder->cmd_buf; /* TODO: Should be allocated at each call? */
@@ -105,65 +132,65 @@ CMD_END:
     return err;
 }
 
-#define __PCAN_ONEWAY_SET_SINGLE_ARG(fwd, f, n, idx, arg)   \
+#define __PCAN_ONEWAY_SET_SINGLE_ARG(fwd, name, idx, arg)   \
     u8 args[PCAN_CMD_ARGS_LEN] = { \
         [idx] = arg, \
     }; \
-    pcan_cmd_holder_t cmd_holder = { \
-        .functionality = f \
-        , .number = n \
-        , .args = args \
-    }; \
+    pcan_cmd_holder_t cmd_holder = CMD_HOLDER_OF_SET_##name(args); \
     return pcan_oneway_command(fwd, &cmd_holder)
 
-void pcan_fill_cmdbuf_for_setting_sja1000(u8 mode, void *buf)
-{
-    pcan_fill_command_buffer(9, 2, &mode, sizeof(mode) + 1, buf);
-}
+#define __PCAN_ONEWAY_SET_SINGLE_ARG_ASYNC(fwd, name, idx, arg, comp_fn, ctx)   \
+    u8 args[PCAN_CMD_ARGS_LEN] = { \
+        [idx] = arg, \
+    }; \
+    pcan_cmd_holder_t cmd_holder = CMD_HOLDER_OF_SET_##name(args, .complete_func = comp_fn, .context = ctx); \
+    return pcan_oneway_command_async(fwd, &cmd_holder)
 
 int pcan_cmd_set_sja1000(struct usb_forwarder *forwarder, u8 mode)
 {
-    __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, 9, 2, 1, mode);
+    __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, SAJ1000, 1, mode);
 }
 
-void pcan_fill_cmdbuf_for_setting_bus(u8 is_on, void *buf)
+int pcan_cmd_set_sja1000_async(struct usb_forwarder *forwarder, u8 mode, void *complete_func, void *context)
 {
-    pcan_fill_command_buffer(3, 2, &is_on, sizeof(is_on) + 0, buf);
+    __PCAN_ONEWAY_SET_SINGLE_ARG_ASYNC(forwarder, SAJ1000, 1, mode, complete_func, context);
 }
 
 int pcan_cmd_set_bus(struct usb_forwarder *forwarder, u8 is_on)
 {
-    __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, 3, 2, 0, !!is_on);
+    __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, BUS, 0, !!is_on);
 }
 
-void pcan_fill_cmdbuf_for_setting_silent(u8 is_on, void *buf)
+int pcan_cmd_set_bus_async(struct usb_forwarder *forwarder, u8 is_on, void *complete_func, void *context)
 {
-    pcan_fill_command_buffer(3, 3, &is_on, sizeof(is_on) + 0, buf);
+    __PCAN_ONEWAY_SET_SINGLE_ARG_ASYNC(forwarder, BUS, 0, !!is_on, complete_func, context);
 }
 
 int pcan_cmd_set_silent(struct usb_forwarder *forwarder, u8 is_on)
 {
-    __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, 3, 3, 0, !!is_on);
+    __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, SILENT, 0, !!is_on);
 }
 
-void pcan_fill_cmdbuf_for_setting_ext_vcc(u8 is_on, void *buf)
+int pcan_cmd_set_silent_async(struct usb_forwarder *forwarder, u8 is_on, void *complete_func, void *context)
 {
-    pcan_fill_command_buffer(10, 2, &is_on, sizeof(is_on) + 0, buf);
+    __PCAN_ONEWAY_SET_SINGLE_ARG_ASYNC(forwarder, SILENT, 0, !!is_on, complete_func, context);
 }
 
 int pcan_cmd_set_ext_vcc(struct usb_forwarder *forwarder, u8 is_on)
 {
-    __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, 10, 2, 0, !!is_on);
+    __PCAN_ONEWAY_SET_SINGLE_ARG(forwarder, EXT_VCC, 0, !!is_on);
 }
 
-int pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt)
+int pcan_cmd_set_ext_vcc_async(struct usb_forwarder *forwarder, u8 is_on, void *complete_func, void *context)
+{
+    __PCAN_ONEWAY_SET_SINGLE_ARG_ASYNC(forwarder, EXT_VCC, 0, !!is_on, complete_func, context);
+}
+
+int __pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt,
+    void *complete_func, void *context, int (*command_func)(usb_forwarder_t *, pcan_cmd_holder_t *))
 {
     u8 args[PCAN_CMD_ARGS_LEN] = { 0 };
-    pcan_cmd_holder_t cmd_holder = {
-        .functionality = 1
-        , .number = 2
-        , .args = args
-    };
+    pcan_cmd_holder_t cmd_holder = CMD_HOLDER_OF_SET_BITTIMING(args, .complete_func = complete_func, .context = context);
     u8 btr0 = ((bt->brp - 1) & 0x3f) | (((bt->sjw - 1) & 0x3) << 6);
     u8 btr1 = ((bt->prop_seg + bt->phase_seg1 - 1) & 0xf) | (((bt->phase_seg2 - 1) & 0x7) << 4);
 
@@ -177,22 +204,23 @@ int pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming
     args[0] = btr1;
     args[1] = btr0;
 
-    return pcan_oneway_command(forwarder, &cmd_holder);
+    return command_func(forwarder, &cmd_holder);
 }
 
-void pcan_fill_cmdbuf_for_getting_serial_number(void *buf)
+int pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt)
 {
-    pcan_fill_command_buffer(6, 1, NULL, 0, buf);
+    return __pcan_cmd_set_bittiming(forwarder, bt, NULL, NULL, pcan_oneway_command);
+}
+
+int pcan_cmd_set_bittiming_async(struct usb_forwarder *forwarder, struct can_bittiming *bt, void *complete_func, void *context)
+{
+    return __pcan_cmd_set_bittiming(forwarder, bt, complete_func, context, pcan_oneway_command_async);
 }
 
 int pcan_cmd_get_serial_number(struct usb_forwarder *forwarder, u32 *serial_number)
 {
     u8 result[PCAN_CMD_ARGS_LEN] = { 0 };
-    pcan_cmd_holder_t cmd_holder = {
-        .functionality = 6
-        , .number = 1
-        , .result = result
-    };
+    pcan_cmd_holder_t cmd_holder = CMD_HOLDER_OF_GET_SERIAL_NUMBER(result);
     int err = pcan_responsive_command(forwarder, &cmd_holder);
 
     if (err)
@@ -208,19 +236,10 @@ int pcan_cmd_get_serial_number(struct usb_forwarder *forwarder, u32 *serial_numb
     return err;
 }
 
-void pcan_fill_cmdbuf_for_getting_device_id(void *buf)
-{
-    pcan_fill_command_buffer(4, 1, NULL, 0, buf);
-}
-
 int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
 {
     u8 result[PCAN_CMD_ARGS_LEN] = { 0 };
-    pcan_cmd_holder_t cmd_holder = {
-        .functionality = 4
-        , .number = 1
-        , .result = result
-    };
+    pcan_cmd_holder_t cmd_holder = CMD_HOLDER_OF_GET_DEVICE_ID(result);
     int err = pcan_responsive_command(forwarder, &cmd_holder);
 
     if (err)
@@ -248,5 +267,9 @@ int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
  *
  * >>> 2023-09-29, Man Hung-Coeng <udc577@126.com>:
  *  01. Use logging APIs of 3rd-party klogging.h.
+ *
+ * >>> 2023-10-01, Man Hung-Coeng <udc577@126.com>:
+ *  01. Delete pcan_fill_cmdbuf_for_*().
+ *  02. Add pcan_oneway_command_async() and pcan_cmd_set_*_async().
  */
 

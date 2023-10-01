@@ -24,6 +24,7 @@
 
 #include "common.h"
 #include "klogging.h"
+#include "can_commands.h"
 #include "packet_codec.h"
 #include "usb_driver.h"
 
@@ -71,16 +72,30 @@ static inline void pcan_dump_mem(char *prompt, void *ptr, int len)
     print_hex_dump(KERN_INFO, DEV_NAME " ", DUMP_PREFIX_NONE, 16, 1, ptr, len, false);
 }
 
+static void activate_timer_and_free_urb(struct urb *urb)
+{
+    usb_forwarder_t *forwarder = (usb_forwarder_t *)urb->context;
+
+    mod_timer(&forwarder->restart_timer, jiffies + msecs_to_jiffies(PCAN_USB_STARTUP_TIMEOUT_MS));
+
+    usbdrv_default_completion(urb);
+}
+
 int pcan_net_set_can_mode(struct net_device *netdev, enum can_mode mode)
 {
+    usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(netdev);
     int err = 0;
 
-    netdev_notice_v(netdev, "%s(%d)\n", __func__, mode);
+    netdev_notice_v(netdev, "mode = %d\n", mode);
 
     switch (mode)
     {
     case CAN_MODE_START:
-        pcan_net_wake_up(netdev); /* TODO: Need to set CAN bus on? */
+        if (timer_pending(&forwarder->restart_timer))
+            return -EBUSY;
+
+        err = pcan_cmd_set_bus_async(forwarder, /* is_on = */1, activate_timer_and_free_urb, forwarder);
+
         break;
 
     default:
@@ -484,5 +499,8 @@ void pcan_net_set_ops(struct net_device *netdev)
  *
  * >>> 2023-09-29, Man Hung-Coeng <udc577@126.com>:
  *  01. Use logging APIs of 3rd-party klogging.h.
+ *
+ * >>> 2023-10-01, Man Hung-Coeng <udc577@126.com>:
+ *  01. Set CAN bus on within pcan_net_set_can_mode().
  */
 
