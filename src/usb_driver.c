@@ -255,7 +255,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     forwarder->can.do_set_mode = pcan_net_set_can_mode;
     forwarder->can.ctrlmode_supported = CAN_CTRLMODE_3_SAMPLES | CAN_CTRLMODE_LISTENONLY;
     forwarder->can.restart_ms = restart_ms;
-    /* forwarder->can.bittiming.bitrate = bitrate; */ /* does not work */
+    forwarder->can.bittiming.bitrate = bitrate;
 
     if ((err = register_candev(netdev)) < 0)
     {
