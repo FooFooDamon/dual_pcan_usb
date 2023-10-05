@@ -29,11 +29,11 @@ extern "C" {
 #endif
 
 #ifndef DRIVER_VERSION
-#define DRIVER_VERSION          "0.99.99"
+#define DRIVER_VERSION          "0.5.0"
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION             "0.99.99"
+#define APP_VERSION             "0.1.0"
 #endif
 
 #ifdef __cplusplus
@@ -49,5 +49,9 @@ extern "C" {
  *
  * >>> 2023-07-19, Man Hung-Coeng <udc577@126.com>:
  *  01. Create.
+ *
+ * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
+ *  01. Reset DRIVER_VERSION and APP_VERSION to values
+ *      which show the current progress of project.
  */
 

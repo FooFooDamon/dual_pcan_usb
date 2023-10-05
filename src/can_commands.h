@@ -76,7 +76,13 @@ int pcan_cmd_set_ext_vcc_async(struct usb_forwarder *forwarder, u8 is_on, void *
 
 struct can_bittiming;
 
-#define CMD_HOLDER_OF_SET_BITTIMING(_args, ...)         { .functionality = 1, .number = 2, .args = _args, ##__VA_ARGS__ }
+#define CMD_HOLDER_OF_SET_BTR0BTR1(_args, ...)          { .functionality = 1, .number = 2, .args = _args, ##__VA_ARGS__ }
+int pcan_cmd_set_btr0btr1(struct usb_forwarder *forwarder, u8 btr0, u8 btr1);
+int pcan_cmd_set_btr0btr1_async(struct usb_forwarder *forwarder, u8 btr0, u8 btr1, void *complete_func, void *context);
+#define CMD_HOLDER_OF_SET_BITRATE                       CMD_HOLDER_OF_SET_BTR0BTR1
+int pcan_cmd_set_bitrate(struct usb_forwarder *forwarder, u32 bitrate);
+int pcan_cmd_set_bitrate_async(struct usb_forwarder *forwarder, u32 bitrate, void *complete_func, void *context);
+#define CMD_HOLDER_OF_SET_BITTIMING                     CMD_HOLDER_OF_SET_BTR0BTR1
 int pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt);
 int pcan_cmd_set_bittiming_async(struct usb_forwarder *forwarder, struct can_bittiming *bt, void *complete_func, void *context);
 
@@ -107,5 +113,9 @@ int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id);
  *  01. Delete pcan_fill_*().
  *  02. Add function pcan_oneway_command_async() and pcan_cmd_set_*_async().
  *  03. Add macro CMD_HOLDER_OF_*().
+ *
+ * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add macro CMD_HOLDER_OF_SET_{BTR0BTR1,BITRATE}().
+ *  02. Add function pcan_cmd_set_{btr0btr1,bitrate}[_async]().
  */
 

@@ -58,6 +58,17 @@ const struct can_bittiming_const* get_can_bittiming_const(void)
     return &S_CAN_BITTIMING_CONST;
 }
 
+int pcan_net_set_can_bittiming(struct net_device *netdev)
+{
+    usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(netdev);
+    int err = pcan_cmd_set_bittiming(forwarder, &forwarder->can.bittiming);
+
+    if (err)
+        netdev_err_v(netdev, "couldn't set bitrate (err %d)\n", err);
+
+    return err;
+}
+
 void pcan_net_wake_up(struct net_device *netdev)
 {
     struct can_priv *can = (struct can_priv *)netdev_priv(netdev);
@@ -508,5 +519,8 @@ void pcan_net_set_ops(struct net_device *netdev)
  * >>> 2023-10-01, Man Hung-Coeng <udc577@126.com>:
  *  01. Set CAN bus on within pcan_net_set_can_mode().
  *  02. Set CAN silent mode and external VCC within start_can_interface().
+ *
+ * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add pcan_net_set_can_bittiming().
  */
 

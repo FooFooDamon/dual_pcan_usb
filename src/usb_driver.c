@@ -32,6 +32,23 @@
 
 #define PCAN_USB_MSG_TIMEOUT_MS         1000
 
+#define DEFAULT_BIT_RATE                1000000
+#define DEFAULT_TX_QUEUE_LEN            256
+#define DEFAULT_RESTART_MSECS           1000
+
+u32 bitrate = DEFAULT_BIT_RATE;
+module_param(bitrate, uint, 0644);
+MODULE_PARM_DESC(bitrate, "initial nominal bitrate (default: " __stringify(DEFAULT_BIT_RATE) ")");
+
+u16 txqueuelen = DEFAULT_TX_QUEUE_LEN;
+module_param(txqueuelen, ushort, 0644);
+MODULE_PARM_DESC(txqueuelen, "transmit queue length of netdev (default: " __stringify(DEFAULT_TX_QUEUE_LEN) ")");
+
+u16 restart_ms = DEFAULT_RESTART_MSECS;
+module_param(restart_ms, ushort, 0644);
+MODULE_PARM_DESC(restart_ms, "restart timeout in milliseconds from bus-off state (default: "
+    __stringify(DEFAULT_RESTART_MSECS) ")");
+
 static struct usb_device_id s_usb_ids[] = {
     { USB_DEVICE(VENDOR_ID, PRODUCT_ID) }
     , {}
@@ -168,17 +185,6 @@ static void network_up_callback(struct timer_list *timer)
     pcan_net_wake_up(forwarder->net_dev);
 }
 
-static int set_can_bittiming(struct net_device *dev)
-{
-    usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(dev);
-    int err = pcan_cmd_set_bittiming(forwarder, &forwarder->can.bittiming);
-
-    if (err)
-        netdev_err_v(dev, "couldn't set bitrate (err %d)\n", err);
-
-    return err;
-}
-
 static int check_device_info(usb_forwarder_t *forwarder)
 {
     u32 serial_number = 0;
@@ -213,6 +219,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     }
     SET_NETDEV_DEV(netdev,  &interface->dev); /* Set netdev's parent device. */
     netdev->flags |= IFF_ECHO; /* Support local echo. */
+    netdev->tx_queue_len = txqueuelen;
     pcan_net_set_ops(netdev);
 
     forwarder = netdev_priv(netdev);
@@ -221,7 +228,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     {
         err = -ENOMEM;
         dev_err_v(&interface->dev, "kmalloc() for cmd_buf failed\n");
-        goto probe_failed;
+        goto lbl_release_res;
     }
     forwarder->net_dev = netdev;
     forwarder->usb_dev = interface_to_usbdev(interface);
@@ -236,25 +243,33 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
         forwarder->tx_contexts[i].echo_index = PCAN_USB_MAX_TX_URBS;
     }
 
-    forwarder->can.clock = *get_fixed_can_clock();
-    forwarder->can.bittiming_const = get_can_bittiming_const();
-    forwarder->can.do_set_bittiming = set_can_bittiming;
-    forwarder->can.do_set_mode = pcan_net_set_can_mode;
-    forwarder->can.ctrlmode_supported = CAN_CTRLMODE_3_SAMPLES | CAN_CTRLMODE_LISTENONLY;
-
-    /* TODO: register_candev() */
-
-    if ((err = check_device_info(forwarder)) < 0)
-        goto probe_failed;
-
-    if ((err = usbdrv_reset_bus(forwarder, /* is_on = */0)) < 0)
-        goto probe_failed;
-
 #ifdef setup_timer
     setup_timer(&forwarder->restart_timer, network_up_callback, (unsigned long)forwarder);
 #else
     timer_setup(&forwarder->restart_timer, network_up_callback, /* flags = */0);
 #endif
+
+    forwarder->can.clock = *get_fixed_can_clock();
+    forwarder->can.bittiming_const = get_can_bittiming_const();
+    forwarder->can.do_set_bittiming = pcan_net_set_can_bittiming;
+    forwarder->can.do_set_mode = pcan_net_set_can_mode;
+    forwarder->can.ctrlmode_supported = CAN_CTRLMODE_3_SAMPLES | CAN_CTRLMODE_LISTENONLY;
+    forwarder->can.restart_ms = restart_ms;
+    /* forwarder->can.bittiming.bitrate = bitrate; */ /* does not work */
+
+    if ((err = register_candev(netdev)) < 0)
+    {
+        dev_err_v(&interface->dev, "couldn't register CAN device: %d\n", err);
+        goto lbl_release_res;
+    }
+
+    if ((err = check_device_info(forwarder)) < 0)
+        goto lbl_unreg_can;
+
+    if ((err = usbdrv_reset_bus(forwarder, /* is_on = */0)) < 0)
+        goto lbl_unreg_can;
+
+    pcan_cmd_set_bitrate(forwarder, bitrate);
 
     usb_set_intfdata(interface, forwarder);
 
@@ -262,9 +277,11 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
 
     return 0;
 
-probe_failed:
+lbl_unreg_can:
 
-    /*unregister_candev(netdev);*/
+    unregister_candev(netdev);
+
+lbl_release_res:
 
     if (NULL != forwarder->cmd_buf)
         kfree(forwarder->cmd_buf);
@@ -281,7 +298,7 @@ static void pcan_usb_plugout(struct usb_interface *interface)
     if (NULL != forwarder)
     {
         forwarder->state &= ~PCAN_USB_STATE_CONNECTED; /* Clear it as soon as possible. */
-        /*unregister_candev(forwarder->netdev);*/
+        unregister_candev(forwarder->net_dev);
         /* TODO: Wait and free forwarder depending on reference counting mechanism. */
         kfree(forwarder->cmd_buf);
         free_candev(forwarder->net_dev);
@@ -321,5 +338,9 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *  01. Remove macro PCAN_USB_STARTUP_TIMEOUT_MS and PCAN_USB_MAX_CMD_LEN.
  *  02. Rename function pcan_usb_restart_callback() to network_up_callback().
  *  03. Set CAN bus off within pcan_usb_plugin().
+ *
+ * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
+ *  01. Implement netdev registration and deregistration,
+ *      and do some initializations according to module parameters.
  */
 

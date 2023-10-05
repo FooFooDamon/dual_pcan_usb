@@ -186,25 +186,78 @@ int pcan_cmd_set_ext_vcc_async(struct usb_forwarder *forwarder, u8 is_on, void *
     __PCAN_ONEWAY_SET_SINGLE_ARG_ASYNC(forwarder, EXT_VCC, 0, !!is_on, complete_func, context);
 }
 
-int __pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt,
+static inline int __pcan_cmd_set_btr0btr1(struct usb_forwarder *forwarder, u8 btr0, u8 btr1,
     void *complete_func, void *context, int (*command_func)(usb_forwarder_t *, pcan_cmd_holder_t *))
 {
-    u8 args[PCAN_CMD_ARGS_LEN] = { 0 };
-    pcan_cmd_holder_t cmd_holder = CMD_HOLDER_OF_SET_BITTIMING(args, .complete_func = complete_func, .context = context);
-    u8 btr0 = ((bt->brp - 1) & 0x3f) | (((bt->sjw - 1) & 0x3) << 6);
-    u8 btr1 = ((bt->prop_seg + bt->phase_seg1 - 1) & 0xf) | (((bt->phase_seg2 - 1) & 0x7) << 4);
+    u8 args[PCAN_CMD_ARGS_LEN] = {
+        [0] = (btr1 | ((forwarder->can.ctrlmode & CAN_CTRLMODE_3_SAMPLES) ? 0x80 : 0)),
+        [1] = btr0,
+    };
+    pcan_cmd_holder_t cmd_holder = CMD_HOLDER_OF_SET_BTR0BTR1(args, .complete_func = complete_func, .context = context);
 
     /* TODO: Reference counting or something. */
 
-    if (forwarder->can.ctrlmode & CAN_CTRLMODE_3_SAMPLES)
-        btr1 |= 0x80;
+    return command_func(forwarder, &cmd_holder);
+}
+
+int pcan_cmd_set_btr0btr1(struct usb_forwarder *forwarder, u8 btr0, u8 btr1)
+{
+    return __pcan_cmd_set_btr0btr1(forwarder, btr0, btr1, NULL, NULL, pcan_oneway_command);
+}
+
+int pcan_cmd_set_btr0btr1_async(struct usb_forwarder *forwarder, u8 btr0, u8 btr1, void *complete_func, void *context)
+{
+    return __pcan_cmd_set_btr0btr1(forwarder, btr0, btr1, complete_func, context, pcan_oneway_command_async);
+}
+
+static inline int __pcan_cmd_set_bitrate(struct usb_forwarder *forwarder, u32 bitrate,
+    void *complete_func, void *context, int (*command_func)(usb_forwarder_t *, pcan_cmd_holder_t *))
+{
+    u8 btr0, btr1;
+
+#define CASE_BITRATE(_bitrate, _btr0, _btr1)    case _bitrate: btr0 = _btr0; btr1 = _btr1; break;
+
+    switch (bitrate)
+    {
+    CASE_BITRATE(1000000, 0x00, 0x14);
+    CASE_BITRATE(500000, 0x00, 0x1C);
+    CASE_BITRATE(250000, 0x01, 0x1C);
+    CASE_BITRATE(125000, 0x03, 0x1C);
+    CASE_BITRATE(100000, 0x43, 0x2F);
+    CASE_BITRATE(50000, 0x47, 0x2F);
+    CASE_BITRATE(20000, 0x53, 0x2F);
+    CASE_BITRATE(10000, 0x67, 0x2F);
+    CASE_BITRATE(5000, 0x7F, 0x7F);
+
+    default:
+        pr_err_v("Invalid bitrate value: %u\n", bitrate);
+        return -EINVAL;
+    }
+
+    pr_notice_v("setting bitrate = %u (that is: BTR0=0x%02x, BTR1=0x%02x)\n", bitrate, btr0, btr1);
+
+    return __pcan_cmd_set_btr0btr1(forwarder, btr0, btr1, complete_func, context, command_func);
+}
+
+int pcan_cmd_set_bitrate(struct usb_forwarder *forwarder, u32 bitrate)
+{
+    return __pcan_cmd_set_bitrate(forwarder, bitrate, NULL, NULL, pcan_oneway_command);
+}
+
+int pcan_cmd_set_bitrate_async(struct usb_forwarder *forwarder, u32 bitrate, void *complete_func, void *context)
+{
+    return __pcan_cmd_set_bitrate(forwarder, bitrate, complete_func, context, pcan_oneway_command_async);
+}
+
+static inline int __pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt,
+    void *complete_func, void *context, int (*command_func)(usb_forwarder_t *, pcan_cmd_holder_t *))
+{
+    u8 btr0 = ((bt->brp - 1) & 0x3f) | (((bt->sjw - 1) & 0x3) << 6);
+    u8 btr1 = ((bt->prop_seg + bt->phase_seg1 - 1) & 0xf) | (((bt->phase_seg2 - 1) & 0x7) << 4);
 
     netdev_notice_v(forwarder->net_dev, "setting BTR0=0x%02x BTR1=0x%02x\n", btr0, btr1);
 
-    args[0] = btr1;
-    args[1] = btr0;
-
-    return command_func(forwarder, &cmd_holder);
+    return __pcan_cmd_set_btr0btr1(forwarder, btr0, btr1, complete_func, context, command_func);
 }
 
 int pcan_cmd_set_bittiming(struct usb_forwarder *forwarder, struct can_bittiming *bt)
@@ -271,5 +324,8 @@ int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
  * >>> 2023-10-01, Man Hung-Coeng <udc577@126.com>:
  *  01. Delete pcan_fill_cmdbuf_for_*().
  *  02. Add pcan_oneway_command_async() and pcan_cmd_set_*_async().
+ *
+ * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add pcan_cmd_set_{btr0btr1,bitrate}[_async]().
  */
 
