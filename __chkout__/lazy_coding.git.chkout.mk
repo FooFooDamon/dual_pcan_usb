@@ -11,6 +11,7 @@ export CHKOUT_TAIL_PARAMS :=
 export CHKOUT_PARTIAL_ITEMS := main/makefile/__ver__.mk \
     df167ef5e9d62b9e73a90f4129b4771b3d2b66b9/makefile/linux_driver.mk \
     5cb0b806315430dbd8c6b673a061514cec897788/c_and_cpp/native/klogging.h \
+    519faaed33f71ed5d741b0ad13a5e3d1ee840ae0/python/ycm_conf_for_linux_driver.py \
     # Add more items ahead of this line if needed. \
     # Beware that each line should begin with 4 spaces and end with a backslash.
 
