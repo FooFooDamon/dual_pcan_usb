@@ -10,6 +10,7 @@
 #include "netdev_interfaces.h"
 
 #include <linux/version.h>
+#include <linux/rtnetlink.h> /* For rtnl_lock() and rtnl_unlock() in old versions. */
 #include <linux/netdevice.h>
 #include <linux/can/dev.h>
 
@@ -66,6 +67,21 @@ void pcan_net_wake_up(struct net_device *netdev)
 
     can->state = CAN_STATE_ERROR_ACTIVE;
     netif_wake_queue(netdev);
+}
+
+int pcan_net_dev_open(struct net_device *netdev)
+{
+    int err;
+
+    rtnl_lock();
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 1, 15)
+    err = dev_open(netdev);
+#else
+    err = dev_open(netdev, NULL);
+#endif
+    rtnl_unlock();
+
+    return err;
 }
 
 static inline void pcan_dump_mem(char *prompt, void *ptr, int len)
@@ -188,7 +204,7 @@ static void usb_write_bulk_callback(struct urb *urb)
 
     default:
         netdev_err_ratelimited_v(netdev, "Tx urb aborted (%d)\n", urb->status);
-        /* FIXME: fallthrough */
+        fallthrough;
 
     case -EPROTO:
     case -ENOENT:
@@ -201,7 +217,7 @@ static void usb_write_bulk_callback(struct urb *urb)
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 1, 15)
     can_get_echo_skb(netdev, ctx->echo_index);
 #else
-    can_get_echo_skb(netdev, ctx->echo_index, NULL);
+    if (can_get_echo_skb(netdev, ctx->echo_index, NULL)){}/* Use "if" statement to eliminate -Wunused-result warning. */
 #endif
     ctx->echo_index = PCAN_USB_MAX_TX_URBS;
 
@@ -456,8 +472,7 @@ static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_devic
 
         default:
             netdev_warn_ratelimited_v(netdev, "tx urb submitting failed err=%d\n", err);
-            /* FIXME: fallthrough */
-            /* __attribute__((fallthrough)); */
+            fallthrough;
 
         case -ENOENT:
             ++stats->tx_dropped; /* cable unplugged */
@@ -514,5 +529,9 @@ void pcan_net_set_ops(struct net_device *netdev)
  * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
  *  01. Add pcan_net_set_can_bittiming().
  *  02. Change license to GPL-2.0.
+ *
+ * >>> 2023-10-08, Man Hung-Coeng <udc577@126.com>:
+ *  01. Fix some -Wunused-result and -Wimplicit-fallthrough warnings.
+ *  02. Add pcan_net_dev_open().
  */
 

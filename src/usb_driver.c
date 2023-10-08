@@ -26,19 +26,25 @@
 #define DEFAULT_BIT_RATE                1000000
 #define DEFAULT_TX_QUEUE_LEN            256
 #define DEFAULT_RESTART_MSECS           1000
+#define DEFAULT_NET_UP_FLAG             1
 
-u32 bitrate = DEFAULT_BIT_RATE;
+static u32 bitrate = DEFAULT_BIT_RATE;
 module_param(bitrate, uint, 0644);
 MODULE_PARM_DESC(bitrate, "initial nominal bitrate (default: " __stringify(DEFAULT_BIT_RATE) ")");
 
-u16 txqueuelen = DEFAULT_TX_QUEUE_LEN;
+static u16 txqueuelen = DEFAULT_TX_QUEUE_LEN;
 module_param(txqueuelen, ushort, 0644);
 MODULE_PARM_DESC(txqueuelen, "transmit queue length of netdev (default: " __stringify(DEFAULT_TX_QUEUE_LEN) ")");
 
-u16 restart_ms = DEFAULT_RESTART_MSECS;
+static u16 restart_ms = DEFAULT_RESTART_MSECS;
 module_param(restart_ms, ushort, 0644);
 MODULE_PARM_DESC(restart_ms, "restart timeout in milliseconds from bus-off state (default: "
     __stringify(DEFAULT_RESTART_MSECS) ")");
+
+static bool net_up = DEFAULT_NET_UP_FLAG;
+module_param(net_up, bool, 0644);
+MODULE_PARM_DESC(net_up, "whether to bring up network interface right after the cable is plugged in (default: "
+    __stringify(DEFAULT_NET_UP_FLAG) ")");
 
 static struct usb_device_id s_usb_ids[] = {
     { USB_DEVICE(VENDOR_ID, PRODUCT_ID) }
@@ -261,6 +267,8 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
         goto lbl_unreg_can;
 
     pcan_cmd_set_bitrate(forwarder, bitrate);
+    if (net_up)
+        pcan_net_dev_open(netdev);
 
     usb_set_intfdata(interface, forwarder);
 
@@ -334,5 +342,10 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *  01. Implement netdev registration and deregistration,
  *      and do some initializations according to module parameters.
  *  02. Change license to GPL-2.0.
+ *
+ * >>> 2023-10-08, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add a new module parameter to control whether to bring up network
+ *      interface right after the cable is plugged in,
+ *      and define all the module parameter variables as static variables.
  */
 

@@ -23,6 +23,8 @@ int pcan_net_set_can_bittiming(struct net_device *netdev);
 
 void pcan_net_wake_up(struct net_device *netdev);
 
+int pcan_net_dev_open(struct net_device *netdev);
+
 int pcan_net_set_can_mode(struct net_device *netdev, enum can_mode mode);
 
 void pcan_net_set_ops(struct net_device *netdev);
@@ -45,5 +47,8 @@ void pcan_net_set_ops(struct net_device *netdev);
  * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
  *  01. Add pcan_net_set_can_bittiming().
  *  02. Change license to GPL-2.0.
+ *
+ * >>> 2023-10-08, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add pcan_net_dev_open().
  */
 

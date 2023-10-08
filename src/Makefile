@@ -36,6 +36,7 @@ ifeq (${ARCH},${HOST_ARCH})
 endif
 export APP_NAME := ${DRVNAME}
 export APP_OBJS := setting_app.o
+export OTHER_APP_CFLAGS := -std=c99
 
 -include ${THIRD_PARTY_DIR}/${LCS_ALIAS}/makefile/linux_driver.mk
 

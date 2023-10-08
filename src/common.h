@@ -14,6 +14,14 @@
 extern "C" {
 #endif
 
+#ifndef fallthrough
+#if __has_attribute(__fallthrough__)
+#define fallthrough             __attribute__((__fallthrough__))
+#else
+#define fallthrough             do {} while (0)  /* fallthrough */
+#endif
+#endif
+
 #define DEV_NAME                "dual_pcan_usb"
 #define DEV_MINOR_BASE          32
 #define VENDOR_ID               0x0c72
@@ -38,5 +46,8 @@ extern "C" {
  *
  * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
  *  01. Change license to GPL-2.0.
+ *
+ * >>> 2023-10-08, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add definition of fallthrough.
  */
 
