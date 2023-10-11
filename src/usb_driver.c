@@ -18,6 +18,7 @@
 #include "klogging.h"
 #include "can_commands.h"
 #include "netdev_interfaces.h"
+#include "evol_kernel.h"
 
 #define __FILE__                        "usb_driver.c"
 
@@ -167,16 +168,12 @@ static inline int check_endpoints(const struct usb_interface *interface)
     return 0;
 }
 
-#ifdef setup_timer
-#pragma message("Using old style timer APIs.")
-static void network_up_callback(unsigned long arg)
+static void network_up_callback(timer_cb_arg_t arg)
 {
+#ifdef setup_timer
     usb_forwarder_t *forwarder = (usb_forwarder_t *)arg;
 #else
-#pragma message("Using new style timer APIs.")
-static void network_up_callback(struct timer_list *timer)
-{
-    usb_forwarder_t *forwarder = container_of(timer, usb_forwarder_t, restart_timer);
+    usb_forwarder_t *forwarder = container_of(arg, usb_forwarder_t, restart_timer);
 #endif
 
     pcan_net_wake_up(forwarder->net_dev);
@@ -240,11 +237,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
         forwarder->tx_contexts[i].echo_index = PCAN_USB_MAX_TX_URBS;
     }
 
-#ifdef setup_timer
-    setup_timer(&forwarder->restart_timer, network_up_callback, (unsigned long)forwarder);
-#else
-    timer_setup(&forwarder->restart_timer, network_up_callback, /* flags = */0);
-#endif
+    evol_setup_timer(&forwarder->restart_timer, network_up_callback, forwarder);
 
     forwarder->can.clock = *get_fixed_can_clock();
     forwarder->can.bittiming_const = get_can_bittiming_const();
@@ -347,5 +340,9 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *  01. Add a new module parameter to control whether to bring up network
  *      interface right after the cable is plugged in,
  *      and define all the module parameter variables as static variables.
+ *
+ * >>> 2023-10-11, Man Hung-Coeng <udc577@126.com>:
+ *  01. Include a 3rd-party header file evol_kernel.h and use wrappers in it
+ *      to replace interfaces/definitions which vary from version to version.
  */
 

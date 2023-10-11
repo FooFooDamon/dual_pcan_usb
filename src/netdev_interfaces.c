@@ -19,6 +19,7 @@
 #include "can_commands.h"
 #include "packet_codec.h"
 #include "usb_driver.h"
+#include "evol_kernel.h"
 
 #define __FILE__                        "netdev_interfaces.c"
 
@@ -74,11 +75,7 @@ int pcan_net_dev_open(struct net_device *netdev)
     int err;
 
     rtnl_lock();
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 1, 15)
-    err = dev_open(netdev);
-#else
-    err = dev_open(netdev, NULL);
-#endif
+    err = evol_netdev_open(netdev, NULL);
     rtnl_unlock();
 
     return err;
@@ -195,11 +192,7 @@ static void usb_write_bulk_callback(struct urb *urb)
         ++netdev->stats.tx_packets;
         netdev->stats.tx_bytes += ctx->data_len;
         /* prevent tx timeout */
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 1, 15)
-        netdev->trans_start = jiffies;
-#else
-        netif_trans_update(netdev);
-#endif
+        evol_netif_trans_update(netdev);
         break;
 
     default:
@@ -214,11 +207,7 @@ static void usb_write_bulk_callback(struct urb *urb)
     }
 
     /* should always release echo skb and corresponding context */
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 1, 15)
-    can_get_echo_skb(netdev, ctx->echo_index);
-#else
-    if (can_get_echo_skb(netdev, ctx->echo_index, NULL)){}/* Use "if" statement to eliminate -Wunused-result warning. */
-#endif
+    if (evol_can_get_echo_skb(netdev, ctx->echo_index, NULL)){}/* Use "if" statement to eliminate -Wunused-result warning. */
     ctx->echo_index = PCAN_USB_MAX_TX_URBS;
 
     /* do wakeup tx queue in case of success only */
@@ -441,21 +430,13 @@ static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_devic
     ctx->data_len = frame->can_dlc;
 
     usb_anchor_urb(urb, &forwarder->anchor_tx_submitted);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 1, 15)
-    can_put_echo_skb(skb, netdev, ctx->echo_index);
-#else
-    can_put_echo_skb(skb, netdev, ctx->echo_index, 0);
-#endif
+    evol_can_put_echo_skb(skb, netdev, ctx->echo_index, 0);
     atomic_inc(&forwarder->active_tx_urbs);
 
     err = usb_submit_urb(urb, GFP_ATOMIC);
     if (err)
     {
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 1, 15)
-        can_free_echo_skb(netdev, ctx->echo_index);
-#else
-        can_free_echo_skb(netdev, ctx->echo_index, NULL);
-#endif
+        evol_can_free_echo_skb(netdev, ctx->echo_index, NULL);
 
         usb_unanchor_urb(urb);
 
@@ -480,11 +461,7 @@ static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_devic
     }
     else
     {
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 1, 15)
-        netdev->trans_start = jiffies;
-#else
-        netif_trans_update(netdev);
-#endif
+        evol_netif_trans_update(netdev);
 
         /* slow down tx path */
         if (atomic_read(&forwarder->active_tx_urbs) >= PCAN_USB_MAX_TX_URBS)
@@ -533,5 +510,9 @@ void pcan_net_set_ops(struct net_device *netdev)
  * >>> 2023-10-08, Man Hung-Coeng <udc577@126.com>:
  *  01. Fix some -Wunused-result and -Wimplicit-fallthrough warnings.
  *  02. Add pcan_net_dev_open().
+ *
+ * >>> 2023-10-11, Man Hung-Coeng <udc577@126.com>:
+ *  01. Include a 3rd-party header file evol_kernel.h and use wrappers in it
+ *      to replace interfaces/definitions which vary from version to version.
  */
 
