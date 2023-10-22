@@ -18,6 +18,13 @@
 CMakeCache.txt
 CMakeFiles
 cmake_install.cmake
+.cache/
+compile_commands.json
+cscope.files
+cscope.in.out
+cscope.out
+cscope.po.out
+tags
 .vs
 .vscode
 gccdump.s
@@ -34,7 +41,6 @@ _tmp_
 *.tmp
 .tmp_versions
 core.*
-tags
 *.mod
 *.mod.c
 *.cmd
