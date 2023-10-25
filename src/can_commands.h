@@ -23,8 +23,8 @@ enum pcan_cmd_arg_index
 
 typedef struct pcan_cmd_holder
 {
-    u8 functionality;
-    u8 number;
+    u8 functionality; /* 3: bus setting; others: others. */
+    u8 number; /* bus setting: 2 for transfer switch, 3 for silent mode; others: 1 for GET, 2 for SET */
     /*int timeout_ms;*/
     void *args;
     void *result;
