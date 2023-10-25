@@ -217,7 +217,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     pcan_net_set_ops(netdev);
 
     forwarder = netdev_priv(netdev);
-    memset(forwarder, 0, sizeof(*forwarder));
+    memset(((char *)forwarder) + sizeof(struct can_priv), 0, sizeof(*forwarder) - sizeof(struct can_priv));
     if (NULL == (forwarder->cmd_buf = kmalloc(PCAN_USB_MAX_CMD_LEN, GFP_KERNEL)))
     {
         err = -ENOMEM;
@@ -344,5 +344,10 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  * >>> 2023-10-11, Man Hung-Coeng <udc577@126.com>:
  *  01. Include a 3rd-party header file evol_kernel.h and use wrappers in it
  *      to replace interfaces/definitions which vary from version to version.
+ *
+ * >>> 2023-10-25, Man Hung-Coeng <udc577@126.com>:
+ *  01. Correct the mistake of zeroing CAN private data in pcan_usb_plugin(),
+ *      which results in a null delayed work pointer and thus causes a bunch of
+ *      warning messages while closing the candev in pcan_usb_plugout().
  */
 
