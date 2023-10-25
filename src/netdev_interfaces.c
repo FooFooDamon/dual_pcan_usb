@@ -81,7 +81,7 @@ int pcan_net_dev_open(struct net_device *netdev)
     return err;
 }
 
-static inline void pcan_dump_mem(char *prompt, void *ptr, int len)
+static inline void pcan_dump_mem(const char *prompt, void *ptr, int len)
 {
     pr_info("dumping %s (%d bytes):\n", (prompt ? prompt : "memory"), len);
     print_hex_dump(KERN_INFO, DEV_NAME " ", DUMP_PREFIX_NONE, 16, 1, ptr, len, false);
@@ -176,6 +176,7 @@ static void usb_write_bulk_callback(struct urb *urb)
     pcan_tx_urb_context_t *ctx = (pcan_tx_urb_context_t *)urb->context;
     usb_forwarder_t *forwarder = ctx ? ctx->forwarder : NULL;
     struct net_device *netdev = forwarder ? forwarder->net_dev : NULL;
+    int tx_bytes = 0;
 
     if (NULL == ctx)
         return;
@@ -188,31 +189,34 @@ static void usb_write_bulk_callback(struct urb *urb)
     switch (urb->status)
     {
     case 0:
-        /* transmission complete */
-        ++netdev->stats.tx_packets;
-        netdev->stats.tx_bytes += ctx->data_len;
         /* prevent tx timeout */
         evol_netif_trans_update(netdev);
         break;
-
-    default:
-        netdev_err_ratelimited_v(netdev, "Tx urb aborted (%d)\n", urb->status);
-        fallthrough;
 
     case -EPROTO:
     case -ENOENT:
     case -ECONNRESET:
     case -ESHUTDOWN:
         break;
+
+    default:
+        netdev_err_ratelimited_v(netdev, "Tx urb aborted (%d)\n", urb->status);
+        break;
     }
 
     /* should always release echo skb and corresponding context */
-    if (evol_can_get_echo_skb(netdev, ctx->echo_index, NULL)){}/* Use "if" statement to eliminate -Wunused-result warning. */
+    tx_bytes = evol_can_get_echo_skb(netdev, ctx->echo_index, NULL);
     ctx->echo_index = PCAN_USB_MAX_TX_URBS;
 
-    /* do wakeup tx queue in case of success only */
     if (!urb->status)
+    {
+        /* transmission complete */
+        ++netdev->stats.tx_packets;
+        netdev->stats.tx_bytes += tx_bytes;
+
+        /* do wakeup tx queue in case of success only */
         netif_wake_queue(netdev);
+    }
 }
 
 static int start_can_interface(struct net_device *netdev)
@@ -231,7 +235,6 @@ static int start_can_interface(struct net_device *netdev)
 
         if (NULL == urb)
         {
-            netdev_err_v(netdev, "No memory left for URBs\n");
             err = -ENOMEM;
             break;
         }
@@ -285,7 +288,6 @@ static int start_can_interface(struct net_device *netdev)
 
         if (NULL == urb)
         {
-            netdev_err_v(netdev, "No memory left for URBs\n");
             err = -ENOMEM;
             break;
         }
@@ -378,10 +380,10 @@ static int pcan_net_stop(struct net_device *netdev)
     forwarder->state &= ~PCAN_USB_STATE_STARTED;
     netif_stop_queue(netdev);
 
-    usbdrv_unlink_all_urbs(forwarder);
-
     close_candev(netdev);
     forwarder->can.state = CAN_STATE_STOPPED;
+
+    usbdrv_unlink_all_urbs(forwarder);
 
     return usbdrv_reset_bus(forwarder, /* is_on = */0)/* FIXME: Needed or not? */;
 }
@@ -397,6 +399,17 @@ static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_devic
     int i;
     int err;
     size_t size = PCAN_USB_TX_BUFFER_SIZE;
+
+    if (forwarder->can.ctrlmode & CAN_CTRLMODE_LISTENONLY)
+    {
+        /* FIXME: No netdev_*_once() in old versions. */
+        /*netdev_info_once(netdev, "interface in listen only mode, dropping skb\n");*/
+
+        kfree_skb(skb);
+        ++stats->tx_dropped;
+
+        return NETDEV_TX_OK;
+    }
 
     if (can_dropped_invalid_skb(netdev, skb))
         return NETDEV_TX_OK;
@@ -427,7 +440,6 @@ static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_devic
     }
 
     ctx->echo_index = i;
-    ctx->data_len = frame->can_dlc;
 
     usb_anchor_urb(urb, &forwarder->anchor_tx_submitted);
     evol_can_put_echo_skb(skb, netdev, ctx->echo_index, 0);
@@ -514,5 +526,9 @@ void pcan_net_set_ops(struct net_device *netdev)
  * >>> 2023-10-11, Man Hung-Coeng <udc577@126.com>:
  *  01. Include a 3rd-party header file evol_kernel.h and use wrappers in it
  *      to replace interfaces/definitions which vary from version to version.
+ *
+ * >>> 2023-10-25, Man Hung-Coeng <udc577@126.com>:
+ *  01. Optimize out the field data_len of struct pcan_tx_urb_context.
+ *  02. Drop packets in pcan_net_start_transmit() when in listen-only mode.
  */
 

@@ -41,7 +41,6 @@ typedef struct pcan_tx_urb_context
     struct urb *urb;
     struct usb_forwarder *forwarder;
     u32 echo_index; /* FIXME: What is this field for? */
-    u8 data_len;
 } pcan_tx_urb_context_t;
 
 typedef struct usb_forwarder
@@ -108,5 +107,8 @@ static inline void usbdrv_default_completion(struct urb *urb)
  *
  * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
  *  01. Change license to GPL-2.0.
+ *
+ * >>> 2023-10-25, Man Hung-Coeng <udc577@126.com>:
+ *  01. Delete the field data_len from struct pcan_tx_urb_context.
  */
 
