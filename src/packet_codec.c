@@ -18,8 +18,6 @@
 #include "can_commands.h"
 #include "usb_driver.h"
 
-#define __FILE__                            "packet_codec.c"
-
 #define PCAN_USB_MSG_HEADER_LEN		        2
 
 /* PCAN-USB USB message record status/len field */
@@ -540,5 +538,8 @@ int pcan_decode_and_handle_urb(const struct urb *urb, struct net_device *dev)
  *
  * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
  *  01. Change license to GPL-2.0.
+ *
+ * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
+ *  01. Cancel the re-definition of __FILE__.
  */
 
