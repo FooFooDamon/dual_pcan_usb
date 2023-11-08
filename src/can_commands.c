@@ -13,8 +13,6 @@
 #include "klogging.h"
 #include "usb_driver.h"
 
-#define __FILE__                    "can_commands.c"
-
 #define PCAN_CMD_ARGS_LEN           14
 #define PCAN_CMD_TOTAL_LEN          (PCAN_CMD_ARG_INDEX_ARG + PCAN_CMD_ARGS_LEN)
 
@@ -319,5 +317,8 @@ int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
  * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
  *  01. Add pcan_cmd_set_{btr0btr1,bitrate}[_async]().
  *  02. Change license to GPL-2.0.
+ *
+ * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
+ *  01. Cancel the re-definition of __FILE__.
  */
 
