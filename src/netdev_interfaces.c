@@ -21,8 +21,6 @@
 #include "usb_driver.h"
 #include "evol_kernel.h"
 
-#define __FILE__                        "netdev_interfaces.c"
-
 #define PCAN_USB_CRYSTAL_HZ             16000000
 
 const struct can_clock* get_fixed_can_clock(void)
@@ -530,5 +528,8 @@ void pcan_net_set_ops(struct net_device *netdev)
  * >>> 2023-10-25, Man Hung-Coeng <udc577@126.com>:
  *  01. Optimize out the field data_len of struct pcan_tx_urb_context.
  *  02. Drop packets in pcan_net_start_transmit() when in listen-only mode.
+ *
+ * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
+ *  01. Cancel the re-definition of __FILE__.
  */
 
