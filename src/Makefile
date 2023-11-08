@@ -28,12 +28,11 @@ EVAL_VERSION_ONCE := Y
 
 # export CROSS_KERNEL_DIR := ${HOME}/src/linux
 export DRVNAME ?= dual_pcan_usb
-export ${DRVNAME}-objs ?= main.o usb_driver.o \
-	can_commands.o netdev_interfaces.o packet_codec.o
-ccflags-y += -I${THIRD_PARTY_DIR}/${LCS_ALIAS}/c_and_cpp/native # -D__FILE__=\"$(^F)\"
-ifeq (${ARCH},${HOST_ARCH})
-    ccflags-y += -Wno-builtin-macro-redefined
-endif
+export ${DRVNAME}-objs ?= main.o usb_driver.o can_commands.o \
+    packet_codec.o netdev_interfaces.o chardev_interfaces.o \
+    ../3rdpary/lazy_coding/c_and_cpp/native/chardev_group.o
+ccflags-y += -I${THIRD_PARTY_DIR}/${LCS_ALIAS}/c_and_cpp/native
+export USE_SRC_RELATIVE_PATH := 1
 export APP_NAME := ${DRVNAME}
 export APP_OBJS := setting_app.o
 export OTHER_APP_CFLAGS := -std=c99

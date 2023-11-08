@@ -15,7 +15,8 @@
 #include <linux/can/dev.h> /* struct can_priv */
 #include <linux/usb.h> /* struct urb, usb_* */
 
-#include "packet_codec.h"
+#include "chardev_interfaces.h" /* struct pcan_chardev */
+#include "packet_codec.h" /* struct pcan_time_ref */
 
 #define PCAN_USB_STATE_CONNECTED            ((u8)0x01)
 #define PCAN_USB_STATE_STARTED              ((u8)0x02)
@@ -46,14 +47,16 @@ typedef struct pcan_tx_urb_context
 typedef struct usb_forwarder
 {
     struct can_priv can; /* NOTE: MUST be 1st field, see implementation of alloc_candev(). */
+    struct net_device *net_dev;
+    struct pcan_chardev char_dev;
     struct usb_device *usb_dev;
     struct usb_interface *usb_intf;
-    struct net_device *net_dev;
     u8 *cmd_buf;
     struct usb_anchor anchor_rx_submitted;
     struct usb_anchor anchor_tx_submitted;
-    atomic_t active_tx_urbs;
     pcan_tx_urb_context_t tx_contexts[PCAN_USB_MAX_TX_URBS];
+    atomic_t active_tx_urbs;
+    atomic_t flags;
     struct timer_list restart_timer;
     struct pcan_time_ref time_ref;
     u8 state;
@@ -110,5 +113,8 @@ static inline void usbdrv_default_completion(struct urb *urb)
  *
  * >>> 2023-10-25, Man Hung-Coeng <udc577@126.com>:
  *  01. Delete the field data_len from struct pcan_tx_urb_context.
+ *
+ * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
+ *  01. Re-order some fields of struct forwarder, and add a new one char_dev.
  */
 

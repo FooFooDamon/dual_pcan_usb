@@ -18,9 +18,9 @@
 #include "klogging.h"
 #include "can_commands.h"
 #include "netdev_interfaces.h"
+#include "chardev_interfaces.h"
+#include "chardev_group.h"
 #include "evol_kernel.h"
-
-#define __FILE__                        "usb_driver.c"
 
 #define PCAN_USB_MSG_TIMEOUT_MS         1000
 
@@ -31,20 +31,20 @@
 
 static u32 bitrate = DEFAULT_BIT_RATE;
 module_param(bitrate, uint, 0644);
-MODULE_PARM_DESC(bitrate, "initial nominal bitrate (default: " __stringify(DEFAULT_BIT_RATE) ")");
+MODULE_PARM_DESC(bitrate, " initial nominal bitrate (default: " __stringify(DEFAULT_BIT_RATE) ")");
 
 static u16 txqueuelen = DEFAULT_TX_QUEUE_LEN;
 module_param(txqueuelen, ushort, 0644);
-MODULE_PARM_DESC(txqueuelen, "transmit queue length of netdev (default: " __stringify(DEFAULT_TX_QUEUE_LEN) ")");
+MODULE_PARM_DESC(txqueuelen, " transmit queue length of netdev (default: " __stringify(DEFAULT_TX_QUEUE_LEN) ")");
 
 static u16 restart_ms = DEFAULT_RESTART_MSECS;
 module_param(restart_ms, ushort, 0644);
-MODULE_PARM_DESC(restart_ms, "restart timeout in milliseconds from bus-off state (default: "
+MODULE_PARM_DESC(restart_ms, " restart timeout in milliseconds from bus-off state (default: "
     __stringify(DEFAULT_RESTART_MSECS) ")");
 
 static bool net_up = DEFAULT_NET_UP_FLAG;
 module_param(net_up, bool, 0644);
-MODULE_PARM_DESC(net_up, "whether to bring up network interface right after the cable is plugged in (default: "
+MODULE_PARM_DESC(net_up, " whether to bring up network interface right after the cable is plugged in (default: "
     __stringify(DEFAULT_NET_UP_FLAG) ")");
 
 static struct usb_device_id s_usb_ids[] = {
@@ -65,10 +65,18 @@ static struct usb_driver s_driver = {
 
 int usbdrv_register(void)
 {
-    int ret = usb_register(&s_driver);
+    int ret;
 
-    if (ret)
-        pr_err_v("usb_register() failed: %d\n", ret);
+    if (IS_ERR(CHRDEV_GRP_CREATE(DEV_NAME, DEV_MINOR_BASE, 8, get_file_operations())))
+        ret = PTR_ERR(THIS_CHRDEV_GRP);
+    else
+    {
+        if ((ret = usb_register(&s_driver)) < 0)
+        {
+            pr_err_v("usb_register() failed: %d\n", ret);
+            CHRDEV_GRP_DESTROY(NULL);
+        }
+    }
 
     return ret;
 }
@@ -76,6 +84,7 @@ int usbdrv_register(void)
 void usbdrv_unregister(void)
 {
     usb_deregister(&s_driver);
+    CHRDEV_GRP_DESTROY(NULL);
 }
 
 int usbdrv_bulk_msg_send(usb_forwarder_t *forwarder, void *data, int len)
@@ -253,11 +262,19 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
         goto lbl_release_res;
     }
 
-    if ((err = check_device_info(forwarder)) < 0)
+    forwarder->char_dev.device = CHRDEV_GRP_MAKE_ITEM("pcanusb", forwarder);
+    if (IS_ERR(forwarder->char_dev.device))
+    {
+        err = PTR_ERR(forwarder->char_dev.device);
+        dev_err_v(&interface->dev, "Failed to create chardev: %d\n", err);
         goto lbl_unreg_can;
+    }
+
+    if ((err = check_device_info(forwarder)) < 0)
+        goto lbl_unreg_chardev;
 
     if ((err = usbdrv_reset_bus(forwarder, /* is_on = */0)) < 0)
-        goto lbl_unreg_can;
+        goto lbl_unreg_chardev;
 
     pcan_cmd_set_bitrate(forwarder, bitrate);
     if (net_up)
@@ -268,6 +285,10 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     dev_notice_v(&interface->dev, "New PCAN-USB device plugged in\n");
 
     return 0;
+
+lbl_unreg_chardev:
+
+    CHRDEV_GRP_UNMAKE_ITEM(forwarder->char_dev.device, NULL);
 
 lbl_unreg_can:
 
@@ -290,6 +311,7 @@ static void pcan_usb_plugout(struct usb_interface *interface)
     if (NULL != forwarder)
     {
         forwarder->state &= ~PCAN_USB_STATE_CONNECTED; /* Clear it as soon as possible. */
+        CHRDEV_GRP_UNMAKE_ITEM(forwarder->char_dev.device, NULL);
         unregister_candev(forwarder->net_dev);
         /* TODO: Wait and free forwarder depending on reference counting mechanism. */
         kfree(forwarder->cmd_buf);
@@ -349,5 +371,9 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *  01. Correct the mistake of zeroing CAN private data in pcan_usb_plugin(),
  *      which results in a null delayed work pointer and thus causes a bunch of
  *      warning messages while closing the candev in pcan_usb_plugout().
+ *
+ * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
+ *  01. Cancel the re-definition of __FILE__.
+ *  02. Implement skeleton of character device interface.
  */
 

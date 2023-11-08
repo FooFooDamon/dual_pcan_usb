@@ -10,10 +10,13 @@ export CHKOUT_URL := https://github.com/FooFooDamon/lazy_coding_skills
 export CHKOUT_TAIL_PARAMS :=
 export CHKOUT_PARTIAL_ITEMS := main/c_and_cpp/native/__ver__.h \
     ce7741faa97430aecc3823fa3cf6801c9ba9f03a/makefile/__ver__.mk \
-    df167ef5e9d62b9e73a90f4129b4771b3d2b66b9/makefile/linux_driver.mk \
-    5cb0b806315430dbd8c6b673a061514cec897788/c_and_cpp/native/klogging.h \
+    d5f9972b9e3777e846f62b37dc86c3015dcf77b3/makefile/linux_driver.mk \
+    217ebcbe23a78dacf7491685ef2e121a0721eb62/c_and_cpp/native/klogging.h \
     c2d1842b8e50a887272cd6030c9199ec647b7ea1/c_and_cpp/native/evol_kernel.h \
-    781b5e37614884a6ca334620fff5cf2090796369/python/ycm_conf_for_linux_driver.py \
+    a6e5317c9b43f2aa343216e38a0b6e0f7d623251/c_and_cpp/native/chardev_group.c \
+    a6e5317c9b43f2aa343216e38a0b6e0f7d623251/c_and_cpp/native/chardev_group.h \
+    0ec0fc48ae88c0a69f8378691c30ba5ad0d19a7b/python/ycm_conf_for_c_and_cpp.py \
+    a85cce2c2cc8ac1725a3cad7af09c71f8a6b5a89/python/ycm_conf_for_linux_driver.py \
     # Add more items ahead of this line if needed. \
     # Beware that each line should begin with 4 spaces and end with a backslash.
 
