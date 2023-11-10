@@ -22,10 +22,13 @@ extern "C" {
 #endif
 #endif
 
-#define DEV_NAME                "dual_pcan_usb"
+#define DEV_NAME                "pcanusb"
 #define DEV_MINOR_BASE          32
+
 #define VENDOR_ID               0x0c72
 #define PRODUCT_ID              0x000c
+
+#define DEFAULT_BIT_RATE        1000000
 
 #ifdef __cplusplus
 }
@@ -49,5 +52,9 @@ extern "C" {
  *
  * >>> 2023-10-08, Man Hung-Coeng <udc577@126.com>:
  *  01. Add definition of fallthrough.
+ *
+ * >>> 2023-11-10, Man Hung-Coeng <udc577@126.com>:
+ *  01. Change the value of macro DEV_NAME from "dual_pcan_usb" to "pcanusb".
+ *  02. Add a new macro DEFAULT_BIT_RATE.
  */
 

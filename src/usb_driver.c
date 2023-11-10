@@ -24,7 +24,6 @@
 
 #define PCAN_USB_MSG_TIMEOUT_MS         1000
 
-#define DEFAULT_BIT_RATE                1000000
 #define DEFAULT_TX_QUEUE_LEN            256
 #define DEFAULT_RESTART_MSECS           1000
 #define DEFAULT_NET_UP_FLAG             1
@@ -57,7 +56,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
 static void pcan_usb_plugout(struct usb_interface *interface);
 
 static struct usb_driver s_driver = {
-    .name = DEV_NAME
+    .name = __DRVNAME__
     , .id_table = s_usb_ids
     , .probe = pcan_usb_plugin
     , .disconnect = pcan_usb_plugout
@@ -67,7 +66,7 @@ int usbdrv_register(void)
 {
     int ret;
 
-    if (IS_ERR(CHRDEV_GRP_CREATE(DEV_NAME, DEV_MINOR_BASE, 8, get_file_operations())))
+    if (IS_ERR(CHRDEV_GRP_CREATE(__DRVNAME__, DEV_MINOR_BASE, 8, get_file_operations())))
         ret = PTR_ERR(THIS_CHRDEV_GRP);
     else
     {
@@ -262,7 +261,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
         goto lbl_release_res;
     }
 
-    forwarder->char_dev.device = CHRDEV_GRP_MAKE_ITEM("pcanusb", forwarder);
+    forwarder->char_dev.device = CHRDEV_GRP_MAKE_ITEM(DEV_NAME, forwarder);
     if (IS_ERR(forwarder->char_dev.device))
     {
         err = PTR_ERR(forwarder->char_dev.device);
@@ -375,5 +374,9 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
  *  01. Cancel the re-definition of __FILE__.
  *  02. Implement skeleton of character device interface.
+ *
+ * >>> 2023-11-10, Man Hung-Coeng <udc577@126.com>:
+ *  01. Replace DEV_NAME with __DRVNAME__.
+ *  02. Remove macro DEFAULT_BIT_RATE.
  */
 
