@@ -35,6 +35,7 @@ ccflags-y += -I${THIRD_PARTY_DIR}/${LCS_ALIAS}/c_and_cpp/native
 export USE_SRC_RELATIVE_PATH := 1
 export APP_NAME := ${DRVNAME}
 export APP_OBJS := setting_app.o
+export APP_INCLUDES := -I${THIRD_PARTY_DIR}/${LCS_ALIAS}/c_and_cpp/native
 export OTHER_APP_CFLAGS := -std=c99
 
 -include ${THIRD_PARTY_DIR}/${LCS_ALIAS}/makefile/linux_driver.mk
