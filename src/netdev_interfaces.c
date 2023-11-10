@@ -82,7 +82,7 @@ int pcan_net_dev_open(struct net_device *netdev)
 static inline void pcan_dump_mem(const char *prompt, void *ptr, int len)
 {
     pr_info("dumping %s (%d bytes):\n", (prompt ? prompt : "memory"), len);
-    print_hex_dump(KERN_INFO, DEV_NAME " ", DUMP_PREFIX_NONE, 16, 1, ptr, len, false);
+    print_hex_dump(KERN_INFO, __DRVNAME__ " ", DUMP_PREFIX_NONE, 16, 1, ptr, len, false);
 }
 
 static void activate_timer_and_free_urb(struct urb *urb)
@@ -531,5 +531,8 @@ void pcan_net_set_ops(struct net_device *netdev)
  *
  * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
  *  01. Cancel the re-definition of __FILE__.
+ *
+ * >>> 2023-11-10, Man Hung-Coeng <udc577@126.com>:
+ *  01. Replace DEV_NAME with __DRVNAME__.
  */
 

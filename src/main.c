@@ -20,7 +20,7 @@ static __init int pcan_init(void)
     int ret = usbdrv_register();
 
     if (0 == ret)
-        pr_notice("Initialized %s-%s.%s for Linux-%#x.\n", DEV_NAME, DRIVER_VERSION, __VER__, LINUX_VERSION_CODE);
+        pr_notice("Initialized %s-%s.%s for Linux-%#x.\n", __DRVNAME__, DRIVER_VERSION, __VER__, LINUX_VERSION_CODE);
 
     return ret;
 }
@@ -28,7 +28,7 @@ static __init int pcan_init(void)
 static __exit void pcan_exit(void)
 {
     usbdrv_unregister();
-    pr_notice("Destroyed %s-%s.%s.\n", DEV_NAME, DRIVER_VERSION, __VER__);
+    pr_notice("Destroyed %s-%s.%s.\n", __DRVNAME__, DRIVER_VERSION, __VER__);
 }
 
 module_init(pcan_init);
@@ -50,5 +50,8 @@ MODULE_AUTHOR("Man Hung-Coeng <udc577@126.com>");
  *
  * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
  *  01. Change license to GPL-2.0.
+ *
+ * >>> 2023-11-10, Man Hung-Coeng <udc577@126.com>:
+ *  01. Replace DEV_NAME with __DRVNAME__.
  */
 
