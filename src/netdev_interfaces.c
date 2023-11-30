@@ -79,10 +79,11 @@ int pcan_net_dev_open(struct net_device *netdev)
     return err;
 }
 
-static inline void pcan_dump_mem(const char *prompt, void *ptr, int len)
+void pcan_net_dev_close(struct net_device *netdev)
 {
-    pr_info("dumping %s (%d bytes):\n", (prompt ? prompt : "memory"), len);
-    print_hex_dump(KERN_INFO, __DRVNAME__ " ", DUMP_PREFIX_NONE, 16, 1, ptr, len, false);
+    rtnl_lock();
+    dev_close(netdev); /* NOTE: This function might sleep, DO NOT use it in an interrupt context. */
+    rtnl_unlock();
 }
 
 static void activate_timer_and_free_urb(struct urb *urb)
@@ -118,57 +119,6 @@ int pcan_net_set_can_mode(struct net_device *netdev, enum can_mode mode)
     return err;
 }
 
-static void usb_read_bulk_callback(struct urb *urb)
-{
-    struct net_device *netdev = (struct net_device *)urb->context;
-    usb_forwarder_t *forwarder = netdev ? (usb_forwarder_t *)netdev_priv(netdev) : NULL;
-    int err = 0;
-
-    if (NULL == forwarder || !netif_device_present(netdev))
-        return;
-
-    switch (urb->status)
-    {
-    case 0:
-        break;
-
-    case -EILSEQ:
-    case -ENOENT:
-    case -ECONNRESET:
-    case -ESHUTDOWN:
-        return;
-
-    default:
-        netdev_err_ratelimited_v(netdev, "Rx urb aborted (%d)\n", urb->status);
-        goto resubmit_urb;
-    }
-
-    if (urb->actual_length > 0 && (forwarder->state & PCAN_USB_STATE_STARTED))
-    {
-        err = pcan_decode_and_handle_urb(urb, netdev);
-        if (err)
-            pcan_dump_mem("received usb message", urb->transfer_buffer, urb->transfer_buffer_length);
-    }
-
-resubmit_urb:
-
-    usb_fill_bulk_urb(urb, forwarder->usb_dev, usb_rcvbulkpipe(forwarder->usb_dev, PCAN_USB_EP_MSGIN),
-        urb->transfer_buffer, PCAN_USB_RX_BUFFER_SIZE, usb_read_bulk_callback, netdev);
-
-    usb_anchor_urb(urb, &forwarder->anchor_rx_submitted);
-
-    err = usb_submit_urb(urb, GFP_ATOMIC);
-    if (!err)
-        return;
-
-    usb_unanchor_urb(urb);
-
-    if (-ENODEV == err)
-        netif_device_detach(netdev);
-    else
-        netdev_err_v(netdev, "failed resubmitting read bulk urb: %d\n", err);
-}
-
 static void usb_write_bulk_callback(struct urb *urb)
 {
     pcan_tx_urb_context_t *ctx = (pcan_tx_urb_context_t *)urb->context;
@@ -195,6 +145,7 @@ static void usb_write_bulk_callback(struct urb *urb)
     case -ENOENT:
     case -ECONNRESET:
     case -ESHUTDOWN:
+    case -ENODEV:
         break;
 
     default:
@@ -203,12 +154,13 @@ static void usb_write_bulk_callback(struct urb *urb)
     }
 
     /* should always release echo skb and corresponding context */
-    tx_bytes = evol_can_get_echo_skb(netdev, ctx->echo_index, NULL);
-    ctx->echo_index = PCAN_USB_MAX_TX_URBS;
+    tx_bytes = evol_can_get_echo_skb(netdev, ctx->echo_index - 1, NULL);
+    ctx->echo_index = 0;
 
     if (!urb->status)
     {
         /* transmission complete */
+        atomic_inc(&forwarder->shared_tx_counter);
         ++netdev->stats.tx_packets;
         netdev->stats.tx_bytes += tx_bytes;
 
@@ -225,107 +177,23 @@ static int start_can_interface(struct net_device *netdev)
     int err = 0;
     int i;
 
-    /* allocate rx urbs and submit them */
-    for (i = 0; i < PCAN_USB_MAX_RX_URBS; ++i)
-    {
-        struct urb *urb = usb_alloc_urb(0, GFP_KERNEL);
-        u8 *buf = urb ? kmalloc(PCAN_USB_RX_BUFFER_SIZE, GFP_KERNEL) : NULL;
-
-        if (NULL == urb)
-        {
-            err = -ENOMEM;
-            break;
-        }
-
-        if (NULL == buf)
-        {
-            usb_free_urb(urb);
-            err = -ENOMEM;
-            break;
-        }
-
-        usb_fill_bulk_urb(urb, usb_dev, usb_rcvbulkpipe(usb_dev, PCAN_USB_EP_MSGIN),
-            buf, PCAN_USB_RX_BUFFER_SIZE, usb_read_bulk_callback, netdev);
-
-        /* ask last usb_free_urb() to also kfree() transfer_buffer */
-        urb->transfer_flags |= URB_FREE_BUFFER;
-        usb_anchor_urb(urb, &forwarder->anchor_rx_submitted);
-
-        err = usb_submit_urb(urb, GFP_KERNEL);
-        if (err)
-        {
-            if (-ENODEV == err)
-                netif_device_detach(netdev);
-
-            usb_unanchor_urb(urb);
-            kfree(buf);
-            usb_free_urb(urb);
-
-            break;
-        }
-
-        /* drop reference, USB core will take care of freeing it */
-        usb_free_urb(urb);
-    }
-
-    if (0 == i)
-    {
-        netdev_err_v(netdev, "couldn't setup any rx URB\n");
-        return err;
-    }
-
-    if (i < PCAN_USB_MAX_RX_URBS)
-        netdev_warn_v(netdev, "rx performance may be slow\n");
-
-    /* allocate tx urbs */
     for (i = 0; i < PCAN_USB_MAX_TX_URBS; ++i)
     {
-        pcan_tx_urb_context_t *ctx = forwarder->tx_contexts + i;
-        struct urb *urb = usb_alloc_urb(0, GFP_KERNEL);
-        u8 *buf = urb ? kmalloc(PCAN_USB_TX_BUFFER_SIZE, GFP_KERNEL) : NULL;
-
-        if (NULL == urb)
-        {
-            err = -ENOMEM;
-            break;
-        }
-
-        if (NULL == buf)
-        {
-            usb_free_urb(urb);
-            err = -ENOMEM;
-            break;
-        }
-
-        ctx->forwarder = forwarder;
-        ctx->urb = urb;
-
-        usb_fill_bulk_urb(urb, usb_dev, usb_sndbulkpipe(usb_dev, PCAN_USB_EP_MSGOUT),
-            buf, PCAN_USB_TX_BUFFER_SIZE, usb_write_bulk_callback, ctx);
-
-        /* ask last usb_free_urb() to also kfree() transfer_buffer */
-        urb->transfer_flags |= URB_FREE_BUFFER;
+        forwarder->tx_contexts[i].urb->complete = usb_write_bulk_callback;
     }
 
-    if (0 == i)
-    {
-        netdev_err_v(netdev, "couldn't setup any tx URB\n");
-        goto lbl_kill_urbs;
-    }
-
-    if (i < PCAN_USB_MAX_TX_URBS)
-        netdev_warn_v(netdev, "tx performance may be slow\n");
-
-    /* TODO: Needed or not: memset(&forwarder->time_ref, 0, sizeof(forwarder->time_ref)); */
+    /* FIXME: Needed or not: memset(&forwarder->time_ref, 0, sizeof(forwarder->time_ref)); */
     err = (dev_revision > 3) ? pcan_cmd_set_silent(forwarder, forwarder->can.ctrlmode & CAN_CTRLMODE_LISTENONLY) : 0;
     if (err || (err = pcan_cmd_set_ext_vcc(forwarder, /* is_on = */0)))
         goto lbl_start_failed;
 
-    forwarder->state |= PCAN_USB_STATE_STARTED;
-
-    err = usbdrv_reset_bus(forwarder, /* is_on = */1);
+    err = (atomic_inc_return(&forwarder->stage) > PCAN_USB_STAGE_ONE_STARTED) ? 0
+        : usbdrv_reset_bus(forwarder, /* is_on = */1);
     if (err)
+    {
+        atomic_dec(&forwarder->stage);
         goto lbl_start_failed;
+    }
 
     forwarder->can.state = CAN_STATE_ERROR_ACTIVE;
 
@@ -335,18 +203,6 @@ lbl_start_failed:
 
     if (-ENODEV == err)
         netif_device_detach(netdev);
-
-    netdev_warn_v(netdev, "couldn't submit control: %d\n", err);
-
-    for (i = 0; i < PCAN_USB_MAX_TX_URBS; ++i)
-    {
-        usb_free_urb(forwarder->tx_contexts[i].urb);
-        forwarder->tx_contexts[i].urb = NULL;
-    }
-
-lbl_kill_urbs:
-
-    usb_kill_anchored_urbs(&forwarder->anchor_rx_submitted);
 
     return err;
 }
@@ -374,16 +230,14 @@ static int pcan_net_open(struct net_device *netdev)
 static int pcan_net_stop(struct net_device *netdev)
 {
     usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(netdev);
+    int stage = atomic_dec_return(&forwarder->stage);
 
-    forwarder->state &= ~PCAN_USB_STATE_STARTED;
     netif_stop_queue(netdev);
 
     close_candev(netdev);
     forwarder->can.state = CAN_STATE_STOPPED;
 
-    usbdrv_unlink_all_urbs(forwarder);
-
-    return usbdrv_reset_bus(forwarder, /* is_on = */0)/* FIXME: Needed or not? */;
+    return (stage < PCAN_USB_STAGE_ONE_STARTED) ? usbdrv_reset_bus(forwarder, /* is_on = */0) : 0;
 }
 
 static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_device *netdev)
@@ -414,7 +268,7 @@ static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_devic
 
     for (i = 0; i < PCAN_USB_MAX_TX_URBS; ++i)
     {
-        if (PCAN_USB_MAX_TX_URBS == forwarder->tx_contexts[i].echo_index)
+        if (!forwarder->tx_contexts[i].echo_index)
         {
             ctx = forwarder->tx_contexts + i;
             break;
@@ -437,28 +291,28 @@ static netdev_tx_t pcan_net_start_transmit(struct sk_buff *skb, struct net_devic
         return NETDEV_TX_OK;
     }
 
-    ctx->echo_index = i;
+    ctx->echo_index = i + 1;
 
     usb_anchor_urb(urb, &forwarder->anchor_tx_submitted);
-    evol_can_put_echo_skb(skb, netdev, ctx->echo_index, 0);
+    evol_can_put_echo_skb(skb, netdev, ctx->echo_index - 1, 0);
     atomic_inc(&forwarder->active_tx_urbs);
 
     err = usb_submit_urb(urb, GFP_ATOMIC);
     if (err)
     {
-        evol_can_free_echo_skb(netdev, ctx->echo_index, NULL);
+        evol_can_free_echo_skb(netdev, ctx->echo_index - 1, NULL);
 
         usb_unanchor_urb(urb);
 
         /* FIXME: this context is not used in fact */
-        ctx->echo_index = PCAN_USB_MAX_TX_URBS;
+        ctx->echo_index = 0;
 
         atomic_dec(&forwarder->active_tx_urbs);
 
         switch (err)
         {
         case -ENODEV:
-            netif_device_detach(netdev);
+            netif_device_detach(netdev); /* FIXME: pcan_net_dev_close() ?? */
             break;
 
         default:
@@ -534,5 +388,11 @@ void pcan_net_set_ops(struct net_device *netdev)
  *
  * >>> 2023-11-10, Man Hung-Coeng <udc577@126.com>:
  *  01. Replace DEV_NAME with __DRVNAME__.
+ *
+ * >>> 2023-11-30, Man Hung-Coeng <udc577@126.com>:
+ *  01. Remove usb_read_bulk_callback().
+ *  02. Remove some resource allocations in start_can_interface()
+ *      and reclamations in pcan_net_stop().
+ *  03. Add some logics to work with chardev interface.
  */
 

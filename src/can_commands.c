@@ -32,18 +32,16 @@ static void pcan_fill_command_buffer(u8 functionality, u8 number, const void *ar
 
 int pcan_oneway_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_holder)
 {
-    u8 *buf = forwarder->cmd_buf; /* TODO: Should be allocated at each call? */
-    int err = 0;
+    int stage = atomic_read(&forwarder->stage);
+    int err = (stage < PCAN_USB_STAGE_CONNECTED) ? -ENOTCONN/* Or: -ENODEV */ : 0;
+    u8 *buf = err ? NULL : forwarder->cmd_buf; /* FIXME: Should be allocated at each call? */
 
-    /* TODO: Reference counting or something. */
+    if (err)
+        return err;
 
-    if (!(forwarder->state & PCAN_USB_STATE_CONNECTED))
-    {
-        err = -EPERM;
-        goto CMD_END;
-    }
+    atomic_inc(&forwarder->pending_cmds);
 
-    /* TODO: Is a lock needed for the only cmd_buf? */
+    /* FIXME: Is a lock needed for the only cmd_buf? */
 
     pcan_fill_command_buffer(cmd_holder->functionality, cmd_holder->number, cmd_holder->args, PCAN_CMD_ARGS_LEN, buf);
 
@@ -53,9 +51,7 @@ int pcan_oneway_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_
             cmd_holder->functionality, cmd_holder->number, err);
     }
 
-CMD_END:
-
-    /* TODO: Reference counting or something. */
+    atomic_dec(&forwarder->pending_cmds);
 
     return err;
 }
@@ -89,16 +85,14 @@ int pcan_oneway_command_async(struct usb_forwarder *forwarder, pcan_cmd_holder_t
 
 int pcan_responsive_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_holder)
 {
-    u8 *buf = forwarder->cmd_buf; /* TODO: Should be allocated at each call? */
-    int err = 0;
+    int stage = atomic_read(&forwarder->stage);
+    int err = (stage < PCAN_USB_STAGE_CONNECTED) ? -ENOTCONN/* Or: -ENODEV */ : 0;
+    u8 *buf = err ? NULL : forwarder->cmd_buf; /* FIXME: Should be allocated at each call? */
 
-    /* TODO: Reference counting or something. */
+    if (err)
+        return err;
 
-    if (!(forwarder->state & PCAN_USB_STATE_CONNECTED))
-    {
-        err = -EPERM;
-        goto CMD_END;
-    }
+    atomic_inc(&forwarder->pending_cmds);
 
     cmd_holder->args = NULL;
     if ((err = pcan_oneway_command(forwarder, cmd_holder)) < 0)
@@ -116,7 +110,7 @@ int pcan_responsive_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *
 
 CMD_END:
 
-    /* TODO: Reference counting or something. */
+    atomic_dec(&forwarder->pending_cmds);
 
     return err;
 }
@@ -183,8 +177,6 @@ static inline int __pcan_cmd_set_btr0btr1(struct usb_forwarder *forwarder, u8 bt
         [1] = btr0,
     };
     pcan_cmd_holder_t cmd_holder = CMD_HOLDER_OF_SET_BTR0BTR1(args, .complete_func = complete_func, .context = context);
-
-    /* TODO: Reference counting or something. */
 
     return command_func(forwarder, &cmd_holder);
 }
@@ -320,5 +312,9 @@ int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
  *
  * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
  *  01. Cancel the re-definition of __FILE__.
+ *
+ * >>> 2023-11-30, Man Hung-Coeng <udc577@126.com>:
+ *  01. Introduce reference counting mechanism in pcan_oneway_command()
+ *      and pcan_responsive_command().
  */
 

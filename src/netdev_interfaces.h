@@ -25,6 +25,9 @@ void pcan_net_wake_up(struct net_device *netdev);
 
 int pcan_net_dev_open(struct net_device *netdev);
 
+/* NOTE: This function might sleep, DO NOT use it in an interrupt context. */
+void pcan_net_dev_close(struct net_device *netdev);
+
 int pcan_net_set_can_mode(struct net_device *netdev, enum can_mode mode);
 
 void pcan_net_set_ops(struct net_device *netdev);
@@ -50,5 +53,8 @@ void pcan_net_set_ops(struct net_device *netdev);
  *
  * >>> 2023-10-08, Man Hung-Coeng <udc577@126.com>:
  *  01. Add pcan_net_dev_open().
+ *
+ * >>> 2023-11-30, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add pcan_net_dev_close().
  */
 

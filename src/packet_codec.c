@@ -70,7 +70,7 @@ typedef struct msg_context
 
 int pcan_encode_frame_to_buf(const struct net_device *dev, const struct can_frame *frame, u8 *obuf, size_t *size)
 {
-    const struct net_device_stats *stats = &dev->stats;
+    usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(dev);
 
     /* header */
     *obuf++ = 2;
@@ -105,8 +105,8 @@ int pcan_encode_frame_to_buf(const struct net_device *dev, const struct can_fram
         obuf += frame->can_dlc;
     }
 
-    /* TODO: Need to update value of size? */
-    obuf[*size - 1] = (u8)(stats->tx_packets & 0xff); /* TODO: What does it mean? */
+    /* FIXME: Need to update value of size? */
+    obuf[*size - 1] = (u8)(atomic_read(&forwarder->shared_tx_counter) & 0xff); /* FIXME: What does it mean? */
 
     return 0;
 }
@@ -171,7 +171,11 @@ static int decode_error(msg_context_t *ctx, u8 number, u8 status_len)
     usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(ctx->netdev);
     enum can_state new_state = forwarder->can.state;
     struct can_frame *frame = NULL;
+    bool net_up = netif_running(ctx->netdev);
     struct sk_buff *skb = NULL;
+
+    if (!net_up) /* FIXME: Does chardev need error report? */
+        return 0;
 
     /* ignore this error until 1st ts received */
     if (number == PCAN_USB_ERROR_QOVR && !forwarder->time_ref.tick_count)
@@ -245,8 +249,8 @@ static int decode_error(msg_context_t *ctx, u8 number, u8 status_len)
     if (forwarder->can.state == new_state)
         return 0;
 
-    skb = alloc_can_skb(ctx->netdev, &frame);
-    if (!skb)
+    skb = net_up ? alloc_can_skb(ctx->netdev, &frame) : NULL;
+    if (net_up && !skb)
         return -ENOMEM;
 
     switch (new_state)
@@ -281,13 +285,21 @@ static int decode_error(msg_context_t *ctx, u8 number, u8 status_len)
 
     forwarder->can.state = new_state;
 
-    if (status_len & PCAN_USB_STATUSLEN_TIMESTAMP)
-        compute_kernel_time(&(forwarder->time_ref), ctx->ts16, &(skb_hwtstamps(skb)->hwtstamp));
+    /*if (net_up)
+    {*/
+        if (status_len & PCAN_USB_STATUSLEN_TIMESTAMP)
+        {
+            ktime_t hardware_timestamp;
 
-    netif_rx(skb);
+            compute_kernel_time(&(forwarder->time_ref), ctx->ts16, &hardware_timestamp);
+            skb_hwtstamps(skb)->hwtstamp = hardware_timestamp;
+        }
 
-    ++ctx->netdev->stats.rx_packets;
-    ctx->netdev->stats.rx_bytes += frame->can_dlc;
+        netif_rx(skb);
+
+        ++ctx->netdev->stats.rx_packets;
+        ctx->netdev->stats.rx_bytes += frame->can_dlc;
+    /*}*/
 
     return 0;
 }
@@ -421,12 +433,38 @@ static int decode_status_and_error(msg_context_t *ctx, u8 status_len)
 static int decode_data(msg_context_t *ctx, u8 status_len)
 {
     usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(ctx->netdev);
+    pcan_chardev_t *chardev = &forwarder->char_dev;
+    int unread_count = (atomic_read(&chardev->open_count) < 1) ? -ESHUTDOWN : atomic_read(&chardev->rx_unread_cnt);
+    int rx_write_idx = atomic_read(&chardev->rx_write_idx);
+    pcan_chardev_msg_t *chardev_msg = (unread_count < 0 || unread_count >= PCAN_CHRDEV_MAX_RX_BUF_COUNT) ? NULL
+        : &chardev->rx_msgs[rx_write_idx];
+    ktime_t hardware_timestamp;
     u8 rec_len = status_len & PCAN_USB_STATUSLEN_DLC;
     struct can_frame *frame = NULL;
-    struct sk_buff *skb = alloc_can_skb(ctx->netdev, &frame);
+    bool net_up = netif_running(ctx->netdev);
+    struct sk_buff *skb = net_up ? alloc_can_skb(ctx->netdev, &frame) : NULL;
 
-    if (!skb)
+    if (net_up && !skb)
         return -ENOMEM;
+
+    if (!frame)
+    {
+        if (unread_count < 0)
+        {
+            dev_err_ratelimited_v(chardev->device, "Device not opened.\n");
+
+            return unread_count;
+        }
+
+        if (unread_count >= PCAN_CHRDEV_MAX_RX_BUF_COUNT)
+        {
+            dev_err_ratelimited_v(chardev->device, "Rx buffer full\n");
+
+            return -ENOBUFS;
+        }
+
+        frame = &chardev_msg->frame;
+    }
 
     if (status_len & PCAN_USB_STATUSLEN_EXT_ID)
     {
@@ -470,18 +508,42 @@ static int decode_data(msg_context_t *ctx, u8 status_len)
         ctx->ptr += rec_len;
     }
 
-    compute_kernel_time(&(forwarder->time_ref), ctx->ts16, &(skb_hwtstamps(skb)->hwtstamp));
+    compute_kernel_time(&(forwarder->time_ref), ctx->ts16, &hardware_timestamp);
 
-    netif_rx(skb);
+    if (net_up)
+    {
+        skb_hwtstamps(skb)->hwtstamp = hardware_timestamp;
 
-    ++ctx->netdev->stats.rx_packets;
-    ctx->netdev->stats.rx_bytes += frame->can_dlc;
+        netif_rx(skb);
+
+        ++ctx->netdev->stats.rx_packets;
+        ctx->netdev->stats.rx_bytes += frame->can_dlc;
+    }
+
+    if (chardev_msg)
+    {
+        unsigned long lock_flags;
+
+        chardev_msg->hwtstamp = hardware_timestamp;
+        if (frame != &chardev_msg->frame)
+        {
+            memcpy(&chardev_msg->frame, frame, sizeof(*frame));
+        }
+
+        spin_lock_irqsave(&chardev->lock, lock_flags);
+
+        atomic_set(&chardev->rx_write_idx, (++rx_write_idx) % PCAN_CHRDEV_MAX_RX_BUF_COUNT);
+        atomic_inc(&chardev->rx_unread_cnt);
+
+        spin_unlock_irqrestore(&chardev->lock, lock_flags);
+    }
 
     return 0;
 
 decode_failed:
 
-    dev_kfree_skb(skb);
+    if (skb)
+        dev_kfree_skb(skb);
 
     return -EINVAL;
 }
@@ -541,5 +603,8 @@ int pcan_decode_and_handle_urb(const struct urb *urb, struct net_device *dev)
  *
  * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
  *  01. Cancel the re-definition of __FILE__.
+ *
+ * >>> 2023-11-30, Man Hung-Coeng <udc577@126.com>:
+ *  01. Combine chardev and netdev interface logics together.
  */
 

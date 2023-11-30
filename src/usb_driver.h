@@ -18,10 +18,13 @@
 #include "chardev_interfaces.h" /* struct pcan_chardev */
 #include "packet_codec.h" /* struct pcan_time_ref */
 
-#define PCAN_USB_STATE_CONNECTED            ((u8)0x01)
-#define PCAN_USB_STATE_STARTED              ((u8)0x02)
+#define PCAN_USB_STAGE_DISCONNECTED         0
+#define PCAN_USB_STAGE_CONNECTED            1
+#define PCAN_USB_STAGE_ONE_STARTED          2
+#define PCAN_USB_STAGE_BOTH_STARTED         3
 
 #define PCAN_USB_STARTUP_TIMEOUT_MS         10
+#define PCAN_USB_END_CHECK_INTERVAL_MS      20
 
 #define PCAN_USB_MAX_TX_URBS                10
 #define PCAN_USB_MAX_RX_URBS                4
@@ -41,7 +44,7 @@ typedef struct pcan_tx_urb_context
 {
     struct urb *urb;
     struct usb_forwarder *forwarder;
-    u32 echo_index; /* FIXME: What is this field for? */
+    u32 echo_index;
 } pcan_tx_urb_context_t;
 
 typedef struct usb_forwarder
@@ -54,12 +57,14 @@ typedef struct usb_forwarder
     u8 *cmd_buf;
     struct usb_anchor anchor_rx_submitted;
     struct usb_anchor anchor_tx_submitted;
-    pcan_tx_urb_context_t tx_contexts[PCAN_USB_MAX_TX_URBS];
+    pcan_tx_urb_context_t tx_contexts[PCAN_USB_MAX_TX_URBS * 2]; /* One half for netdev, the other half for chardev. */
     atomic_t active_tx_urbs;
-    atomic_t flags;
+    atomic_t shared_tx_counter; /* Shared by netdev and chardev. */
+    atomic_t stage; /* 0: disconnected, 1: connected, 2 and above: netdev or/and chardev activated. */
+    atomic_t pending_cmds; /* For synchronized commands only. */
     struct timer_list restart_timer;
     struct pcan_time_ref time_ref;
-    u8 state;
+    struct delayed_work destroy_work;
 } usb_forwarder_t;
 
 int usbdrv_register(void);
@@ -71,6 +76,8 @@ int usbdrv_bulk_msg_send(usb_forwarder_t *forwarder, void *data, int len);
 int usbdrv_bulk_msg_recv(usb_forwarder_t *forwarder, void *data, int len);
 
 int usbdrv_reset_bus(usb_forwarder_t *forwarder, unsigned char is_on);
+
+int usbdrv_alloc_urbs(usb_forwarder_t *forwarder);
 
 void usbdrv_unlink_all_urbs(usb_forwarder_t *forwarder);
 
@@ -116,5 +123,10 @@ static inline void usbdrv_default_completion(struct urb *urb)
  *
  * >>> 2023-11-08, Man Hung-Coeng <udc577@126.com>:
  *  01. Re-order some fields of struct forwarder, and add a new one char_dev.
+ *
+ * >>> 2023-11-30, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add usbdrv_alloc_urbs().
+ *  02. Add and modify some fields in struct usb_forwarder
+ *      to support both chardev and netdev interfaces.
  */
 
