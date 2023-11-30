@@ -10,9 +10,9 @@ export CHKOUT_URL := https://github.com/FooFooDamon/lazy_coding_skills
 export CHKOUT_TAIL_PARAMS :=
 export CHKOUT_PARTIAL_ITEMS := main/c_and_cpp/native/__ver__.h \
     ce7741faa97430aecc3823fa3cf6801c9ba9f03a/makefile/__ver__.mk \
-    d5f9972b9e3777e846f62b37dc86c3015dcf77b3/makefile/linux_driver.mk \
+    961a8ad599580425a6e0dacd05cc2bccb0de49ac/makefile/linux_driver.mk \
     217ebcbe23a78dacf7491685ef2e121a0721eb62/c_and_cpp/native/klogging.h \
-    c2d1842b8e50a887272cd6030c9199ec647b7ea1/c_and_cpp/native/evol_kernel.h \
+    0e46d2f38205b4e7b969b2504bb2382df8460b39/c_and_cpp/native/evol_kernel.h \
     a6e5317c9b43f2aa343216e38a0b6e0f7d623251/c_and_cpp/native/chardev_group.c \
     a6e5317c9b43f2aa343216e38a0b6e0f7d623251/c_and_cpp/native/chardev_group.h \
     0ec0fc48ae88c0a69f8378691c30ba5ad0d19a7b/python/ycm_conf_for_c_and_cpp.py \
