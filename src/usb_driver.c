@@ -159,7 +159,12 @@ static void usb_read_bulk_callback(struct urb *urb)
     {
         err = pcan_decode_and_handle_urb(urb, netdev);
         if (err)
-            pcan_dump_mem("received usb message", urb->transfer_buffer, urb->transfer_buffer_length);
+        {
+            netdev_err_ratelimited_v(netdev, "pcan_decode_and_handle_urb() failed, err = %d\n", err);
+            /*if (-ENOMEM != err && -ESHUTDOWN != err && -ENOBUFS != err)*/
+            if (-EINVAL == err)
+                pcan_dump_mem("received usb message", urb->transfer_buffer, urb->transfer_buffer_length);
+        }
     }
 
 resubmit_urb:
@@ -569,5 +574,8 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *  01. Add usbdrv_alloc_urbs() for initializing resources needed by chardev
  *      and netdev in the same place.
  *  02. Introduce delayed work mechanism to destroy the forwarder instance.
+ *
+ * >>> 2023-12-02, Man Hung-Coeng <udc577@126.com>:
+ *  01. Restrict the use of pcan_dump_mem() in case of message flood.
  */
 
