@@ -173,6 +173,7 @@ static int start_can_interface(struct net_device *netdev)
 {
     usb_forwarder_t *forwarder = (usb_forwarder_t *)netdev_priv(netdev);
     struct usb_device *usb_dev = forwarder->usb_dev;
+    int stage = atomic_inc_return(&forwarder->stage);
     u16 dev_revision = le16_to_cpu(usb_dev->descriptor.bcdDevice) >> 8;
     int err = 0;
     int i;
@@ -182,24 +183,27 @@ static int start_can_interface(struct net_device *netdev)
         forwarder->tx_contexts[i].urb->complete = usb_write_bulk_callback;
     }
 
+    if (stage > PCAN_USB_STAGE_ONE_STARTED)
+        goto lbl_start_ok;
+
     /* FIXME: Needed or not: memset(&forwarder->time_ref, 0, sizeof(forwarder->time_ref)); */
     err = (dev_revision > 3) ? pcan_cmd_set_silent(forwarder, forwarder->can.ctrlmode & CAN_CTRLMODE_LISTENONLY) : 0;
     if (err || (err = pcan_cmd_set_ext_vcc(forwarder, /* is_on = */0)))
         goto lbl_start_failed;
 
-    err = (atomic_inc_return(&forwarder->stage) > PCAN_USB_STAGE_ONE_STARTED) ? 0
-        : usbdrv_reset_bus(forwarder, /* is_on = */1);
+    err = usbdrv_reset_bus(forwarder, /* is_on = */1);
     if (err)
-    {
-        atomic_dec(&forwarder->stage);
         goto lbl_start_failed;
-    }
+
+lbl_start_ok:
 
     forwarder->can.state = CAN_STATE_ERROR_ACTIVE;
 
     return 0;
 
 lbl_start_failed:
+
+    atomic_dec(&forwarder->stage);
 
     if (-ENODEV == err)
         netif_device_detach(netdev);
@@ -394,5 +398,8 @@ void pcan_net_set_ops(struct net_device *netdev)
  *  02. Remove some resource allocations in start_can_interface()
  *      and reclamations in pcan_net_stop().
  *  03. Add some logics to work with chardev interface.
+ *
+ * >>> 2023-12-02, Man Hung-Coeng <udc577@126.com>:
+ *  01. Fix the wrong working flow of turning on CAN bus in open function.
  */
 

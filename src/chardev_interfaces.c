@@ -27,6 +27,7 @@ static int pcan_chardev_open(struct inode *inode, struct file *file)
     usb_forwarder_t *forwarder = (usb_forwarder_t *)CHRDEV_GRP_FIND_ITEM_PRIVDATA_BY_INODE(inode);
     int open_count = forwarder ? atomic_inc_return(&forwarder->char_dev.open_count) : 2;
     u16 dev_revision = forwarder ? (le16_to_cpu(forwarder->usb_dev->descriptor.bcdDevice) >> 8) : 0;
+    s16 stage = PCAN_USB_STAGE_DISCONNECTED;
     int err = forwarder ? 0 : -ENODEV;
     int i;
 
@@ -37,6 +38,7 @@ static int pcan_chardev_open(struct inode *inode, struct file *file)
     {
         dev_err_v(forwarder->char_dev.device, "Device has been opened %d times.\n", open_count);
         atomic_dec(&forwarder->char_dev.open_count);
+
         return -EMFILE;
     }
 
@@ -49,23 +51,19 @@ static int pcan_chardev_open(struct inode *inode, struct file *file)
         forwarder->tx_contexts[i].urb->complete = usb_write_bulk_callback;
     }
 
+    file->private_data = forwarder;
+
+    if ((stage = atomic_inc_return(&forwarder->stage)) > PCAN_USB_STAGE_ONE_STARTED)
+        return 0;
+
     /* FIXME: Needed or not: memset(&forwarder->time_ref, 0, sizeof(forwarder->time_ref)); */
     err = (dev_revision > 3) ? pcan_cmd_set_silent(forwarder, forwarder->can.ctrlmode & CAN_CTRLMODE_LISTENONLY) : 0;
-    if (err || (err = pcan_cmd_set_ext_vcc(forwarder, /* is_on = */0)))
-    {
-        atomic_dec(&forwarder->char_dev.open_count);
-        return err;
-    }
-
-    err = (atomic_inc_return(&forwarder->stage) > PCAN_USB_STAGE_ONE_STARTED) ? 0
-        : usbdrv_reset_bus(forwarder, /* is_on = */1);
-    if (err)
+    if (err || (err = pcan_cmd_set_ext_vcc(forwarder, /* is_on = */0))
+        || (err = usbdrv_reset_bus(forwarder, /* is_on = */1)))
     {
         atomic_dec(&forwarder->stage);
         atomic_dec(&forwarder->char_dev.open_count);
     }
-    else
-        file->private_data = forwarder;
 
     return err;
 }
@@ -134,5 +132,8 @@ const struct file_operations* get_file_operations(void)
  * >>> 2023-11-30, Man Hung-Coeng <udc577@126.com>:
  *  01. Add mutually-exclusive control to open and close functions
  *      to avoid some status and resource conflicts with netdev.
+ *
+ * >>> 2023-12-02, Man Hung-Coeng <udc577@126.com>:
+ *  01. Fix the wrong working flow of turning on CAN bus in open function.
  */
 
