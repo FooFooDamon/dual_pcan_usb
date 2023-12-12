@@ -186,7 +186,8 @@ static int start_can_interface(struct net_device *netdev)
     if (stage > PCAN_USB_STAGE_ONE_STARTED)
         goto lbl_start_ok;
 
-    /* FIXME: Needed or not: memset(&forwarder->time_ref, 0, sizeof(forwarder->time_ref)); */
+    memset(&forwarder->time_ref, 0, sizeof(forwarder->time_ref));
+
     err = (dev_revision > 3) ? pcan_cmd_set_silent(forwarder, forwarder->can.ctrlmode & CAN_CTRLMODE_LISTENONLY) : 0;
     if (err || (err = pcan_cmd_set_ext_vcc(forwarder, /* is_on = */0)))
         goto lbl_start_failed;
@@ -401,5 +402,8 @@ void pcan_net_set_ops(struct net_device *netdev)
  *
  * >>> 2023-12-02, Man Hung-Coeng <udc577@126.com>:
  *  01. Fix the wrong working flow of turning on CAN bus in open function.
+ *
+ * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
+ *  01. Clear time_ref before turning on CAN bus in start_can_interface().
  */
 

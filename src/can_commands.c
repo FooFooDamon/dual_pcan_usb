@@ -39,7 +39,7 @@ int pcan_oneway_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_
     if (err)
         return err;
 
-    atomic_inc(&forwarder->pending_cmds);
+    atomic_inc(&forwarder->pending_ops);
 
     /* FIXME: Is a lock needed for the only cmd_buf? */
 
@@ -51,7 +51,7 @@ int pcan_oneway_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *cmd_
             cmd_holder->functionality, cmd_holder->number, err);
     }
 
-    atomic_dec(&forwarder->pending_cmds);
+    atomic_dec(&forwarder->pending_ops);
 
     return err;
 }
@@ -92,7 +92,7 @@ int pcan_responsive_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *
     if (err)
         return err;
 
-    atomic_inc(&forwarder->pending_cmds);
+    atomic_inc(&forwarder->pending_ops);
 
     cmd_holder->args = NULL;
     if ((err = pcan_oneway_command(forwarder, cmd_holder)) < 0)
@@ -110,7 +110,7 @@ int pcan_responsive_command(struct usb_forwarder *forwarder, pcan_cmd_holder_t *
 
 CMD_END:
 
-    atomic_dec(&forwarder->pending_cmds);
+    atomic_dec(&forwarder->pending_ops);
 
     return err;
 }
@@ -316,5 +316,9 @@ int pcan_cmd_get_device_id(struct usb_forwarder *forwarder, u32 *device_id)
  * >>> 2023-11-30, Man Hung-Coeng <udc577@126.com>:
  *  01. Introduce reference counting mechanism in pcan_oneway_command()
  *      and pcan_responsive_command().
+ *
+ * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
+ *  01. Rename a field of struct usb_forwarder from pending_cmds to pending_ops
+ *      due to its wider use.
  */
 

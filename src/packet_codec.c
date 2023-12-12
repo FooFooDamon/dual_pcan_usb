@@ -458,7 +458,7 @@ static int decode_data(msg_context_t *ctx, u8 status_len)
 
         if (unread_count >= PCAN_CHRDEV_MAX_RX_BUF_COUNT)
         {
-            dev_err_ratelimited_v(chardev->device, "Rx buffer full\n");
+            /* dev_err_ratelimited_v(chardev->device, "Rx buffer full\n"); */
 
             return -ENOBUFS;
         }
@@ -534,8 +534,11 @@ static int decode_data(msg_context_t *ctx, u8 status_len)
 
         atomic_set(&chardev->rx_write_idx, (++rx_write_idx) % PCAN_CHRDEV_MAX_RX_BUF_COUNT);
         atomic_inc(&chardev->rx_unread_cnt);
+        ++chardev->rx_packets;
 
         spin_unlock_irqrestore(&chardev->lock, lock_flags);
+
+        wake_up_interruptible(&chardev->wait_queue_rd);
     }
 
     return 0;
@@ -606,5 +609,9 @@ int pcan_decode_and_handle_urb(const struct urb *urb, struct net_device *dev)
  *
  * >>> 2023-11-30, Man Hung-Coeng <udc577@126.com>:
  *  01. Combine chardev and netdev interface logics together.
+ *
+ * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
+ *  01. Disable the Rx-buffer-full error report,
+ *      update rx_packets and wake up wait_queue_rd in decode_data().
  */
 

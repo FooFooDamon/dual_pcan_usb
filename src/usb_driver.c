@@ -20,6 +20,7 @@
 #include "netdev_interfaces.h"
 #include "chardev_interfaces.h"
 #include "chardev_group.h"
+#include "chardev_ioctl.h"
 #include "evol_kernel.h"
 
 #define PCAN_USB_MSG_TIMEOUT_MS         1000
@@ -160,7 +161,9 @@ static void usb_read_bulk_callback(struct urb *urb)
         err = pcan_decode_and_handle_urb(urb, netdev);
         if (err)
         {
-            netdev_err_ratelimited_v(netdev, "pcan_decode_and_handle_urb() failed, err = %d\n", err);
+            if (-ENOBUFS != err)
+                netdev_err_ratelimited_v(netdev, "pcan_decode_and_handle_urb() failed, err = %d\n", err);
+
             /*if (-ENOMEM != err && -ESHUTDOWN != err && -ENOBUFS != err)*/
             if (-EINVAL == err)
                 pcan_dump_mem("received usb message", urb->transfer_buffer, urb->transfer_buffer_length);
@@ -360,23 +363,23 @@ static void network_up_callback(timer_cb_arg_t arg)
     pcan_net_wake_up(forwarder->net_dev);
 }
 
-static int check_device_info(usb_forwarder_t *forwarder)
+static int get_device_info(usb_forwarder_t *forwarder)
 {
-    u32 serial_number = 0;
-    u32 device_id = 0;
-    int err = pcan_cmd_get_serial_number(forwarder, &serial_number);
+    int err = pcan_cmd_get_serial_number(forwarder, &forwarder->char_dev.serial_number);
 
     if (err < 0)
         return err;
     else
-        dev_notice_v(&forwarder->usb_dev->dev, "Got serial number: 0x%08X\n", serial_number);
+        dev_notice_v(&forwarder->usb_dev->dev, "Got serial number: 0x%08X\n", forwarder->char_dev.serial_number);
 
-    if (!(err = pcan_cmd_get_device_id(forwarder, &device_id)))
-        dev_notice_v(&forwarder->usb_dev->dev, "Got device id: %u\n", device_id);
+    if (!(err = pcan_cmd_get_device_id(forwarder, &forwarder->char_dev.device_id)))
+        dev_notice_v(&forwarder->usb_dev->dev, "Got device id: %u\n", forwarder->char_dev.device_id);
 
     return err;
 }
 
+static int alloc_subitems(usb_forwarder_t *forwarder);
+static void free_subitems(usb_forwarder_t *forwarder);
 static void destroy_usb_forwarder(struct work_struct *work_info);
 
 static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_device_id *id)
@@ -400,26 +403,16 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
 
     forwarder = netdev_priv(netdev);
     memset(((char *)forwarder) + sizeof(struct can_priv), 0, sizeof(*forwarder) - sizeof(struct can_priv));
-    if (NULL == (forwarder->cmd_buf = kmalloc(PCAN_USB_MAX_CMD_LEN, GFP_KERNEL)))
+    if ((err = alloc_subitems(forwarder)) < 0)
     {
-        err = -ENOMEM;
-        dev_err_v(&interface->dev, "kmalloc() for cmd_buf failed\n");
         goto lbl_release_res;
     }
     forwarder->net_dev = netdev;
     forwarder->usb_dev = interface_to_usbdev(interface);
-    forwarder->usb_intf = interface;
+
     atomic_set(&forwarder->stage, PCAN_USB_STAGE_CONNECTED);
-    atomic_set(&forwarder->pending_cmds, 0);
+    atomic_set(&forwarder->pending_ops, 0);
     INIT_DELAYED_WORK(&forwarder->destroy_work, destroy_usb_forwarder);
-
-    init_usb_anchor(&forwarder->anchor_rx_submitted);
-    init_usb_anchor(&forwarder->anchor_tx_submitted);
-    atomic_set(&forwarder->active_tx_urbs, 0);
-    spin_lock_init(&forwarder->char_dev.lock);
-    if ((err = usbdrv_alloc_urbs(forwarder)) < 0)
-        goto lbl_release_res;
-
     evol_setup_timer(&forwarder->restart_timer, network_up_callback, forwarder);
 
     forwarder->can.clock = *get_fixed_can_clock();
@@ -436,15 +429,16 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
         goto lbl_release_res;
     }
 
-    forwarder->char_dev.device = CHRDEV_GRP_MAKE_ITEM(DEV_NAME, forwarder);
-    if (IS_ERR(forwarder->char_dev.device))
-    {
-        err = PTR_ERR(forwarder->char_dev.device);
-        dev_err_v(&interface->dev, "Failed to create chardev: %d\n", err);
+    if ((err = pcan_chardev_initialize(&forwarder->char_dev)) < 0)
         goto lbl_unreg_can;
-    }
 
-    if ((err = check_device_info(forwarder)) < 0)
+    init_usb_anchor(&forwarder->anchor_rx_submitted);
+    init_usb_anchor(&forwarder->anchor_tx_submitted);
+    atomic_set(&forwarder->active_tx_urbs, 0);
+    if ((err = usbdrv_alloc_urbs(forwarder)) < 0)
+        goto lbl_unreg_chardev;
+
+    if ((err = get_device_info(forwarder)) < 0)
         goto lbl_unreg_chardev;
 
     if ((err = usbdrv_reset_bus(forwarder, /* is_on = */0)) < 0)
@@ -462,7 +456,7 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
 
 lbl_unreg_chardev:
 
-    CHRDEV_GRP_UNMAKE_ITEM(forwarder->char_dev.device, NULL);
+    pcan_chardev_finalize(&forwarder->char_dev);
 
 lbl_unreg_can:
 
@@ -470,12 +464,55 @@ lbl_unreg_can:
 
 lbl_release_res:
 
-    if (NULL != forwarder->cmd_buf)
-        kfree(forwarder->cmd_buf);
+    free_subitems(forwarder);
 
     free_candev(netdev);
 
     return err;
+}
+
+static int alloc_subitems(usb_forwarder_t *forwarder)
+{
+    pcan_chardev_t *chrdev = &forwarder->char_dev;
+
+    if (NULL == (chrdev->ioctl_rxmsgs = kzalloc(SIZE_OF_PCANFD_IOCTL_MSGS(PCAN_CHRDEV_MAX_RX_BUF_COUNT), GFP_KERNEL)))
+    {
+        pr_err_v("kzalloc() for char_dev.ioctl_rxmsgs failed\n");
+        goto lbl_failed_exit;
+    }
+
+    if (NULL == (forwarder->cmd_buf = kmalloc(PCAN_USB_MAX_CMD_LEN, GFP_KERNEL)))
+    {
+        pr_err_v("kmalloc() for cmd_buf failed\n");
+        goto lbl_free_ioctl_rxmsgs;
+    }
+
+    return 0;
+
+lbl_free_ioctl_rxmsgs:
+
+    kfree(chrdev->ioctl_rxmsgs);
+
+lbl_failed_exit:
+
+    return -ENOMEM;
+}
+
+static void free_subitems(usb_forwarder_t *forwarder)
+{
+    pcan_chardev_t *chrdev = &forwarder->char_dev;
+
+    if (NULL != forwarder->cmd_buf)
+    {
+        kfree(forwarder->cmd_buf);
+        forwarder->cmd_buf = NULL;
+    }
+
+    if (NULL != chrdev->ioctl_rxmsgs)
+    {
+        kfree(chrdev->ioctl_rxmsgs);
+        chrdev->ioctl_rxmsgs = NULL;
+    }
 }
 
 static void destroy_usb_forwarder(struct work_struct *work_info)
@@ -483,16 +520,27 @@ static void destroy_usb_forwarder(struct work_struct *work_info)
     struct delayed_work *work = (struct delayed_work *)container_of(work_info, struct delayed_work, work);
     usb_forwarder_t *forwarder = (usb_forwarder_t *)container_of(work, usb_forwarder_t, destroy_work);
 
-    if (atomic_read(&forwarder->pending_cmds) > 0)
-    {
-        schedule_delayed_work(work, msecs_to_jiffies(PCAN_USB_END_CHECK_INTERVAL_MS));
+    if (atomic_read(&forwarder->pending_ops) > 0)
+        goto lbl_resched;
 
-        return;
-    }
+    msleep_interruptible(1);
 
-    kfree(forwarder->cmd_buf);
+    if (atomic_read(&forwarder->pending_ops) > 0) /* NOTE: check twice */
+        goto lbl_resched;
+
+    free_subitems(forwarder);
     pr_notice_v("PCAN-USB[%s|%s] destroyed\n", netdev_name(forwarder->net_dev), dev_name(forwarder->char_dev.device));
     free_candev(forwarder->net_dev);
+
+    return;
+
+lbl_resched:
+
+    atomic_set(&forwarder->stage, PCAN_USB_STAGE_DISCONNECTED);
+    wake_up_interruptible(&forwarder->char_dev.wait_queue_rd);
+    wake_up_interruptible(&forwarder->char_dev.wait_queue_wr);
+
+    schedule_delayed_work(work, msecs_to_jiffies(PCAN_USB_END_CHECK_INTERVAL_MS));
 }
 
 static void pcan_usb_plugout(struct usb_interface *interface)
@@ -501,9 +549,9 @@ static void pcan_usb_plugout(struct usb_interface *interface)
 
     if (NULL != forwarder)
     {
-        CHRDEV_GRP_UNMAKE_ITEM(forwarder->char_dev.device, NULL);
+        atomic_set(&forwarder->stage, PCAN_USB_STAGE_DISCONNECTED); /* atomic_dec(&forwarder->stage); */
+        pcan_chardev_finalize(&forwarder->char_dev);
         unregister_candev(forwarder->net_dev);
-        atomic_dec(&forwarder->stage);
         usb_set_intfdata(interface, NULL);
         usbdrv_unlink_all_urbs(forwarder);
         schedule_delayed_work(&forwarder->destroy_work, msecs_to_jiffies(PCAN_USB_END_CHECK_INTERVAL_MS));
@@ -577,5 +625,8 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *
  * >>> 2023-12-02, Man Hung-Coeng <udc577@126.com>:
  *  01. Restrict the use of pcan_dump_mem() in case of message flood.
+ *
+ * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
+ *  01. Adjust some operations according the need of chardev ioctl.
  */
 

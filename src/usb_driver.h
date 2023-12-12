@@ -24,7 +24,7 @@
 #define PCAN_USB_STAGE_BOTH_STARTED         3
 
 #define PCAN_USB_STARTUP_TIMEOUT_MS         10
-#define PCAN_USB_END_CHECK_INTERVAL_MS      20
+#define PCAN_USB_END_CHECK_INTERVAL_MS      500
 
 #define PCAN_USB_MAX_TX_URBS                10
 #define PCAN_USB_MAX_RX_URBS                4
@@ -53,7 +53,6 @@ typedef struct usb_forwarder
     struct net_device *net_dev;
     struct pcan_chardev char_dev;
     struct usb_device *usb_dev;
-    struct usb_interface *usb_intf;
     u8 *cmd_buf;
     struct usb_anchor anchor_rx_submitted;
     struct usb_anchor anchor_tx_submitted;
@@ -61,7 +60,7 @@ typedef struct usb_forwarder
     atomic_t active_tx_urbs;
     atomic_t shared_tx_counter; /* Shared by netdev and chardev. */
     atomic_t stage; /* 0: disconnected, 1: connected, 2 and above: netdev or/and chardev activated. */
-    atomic_t pending_cmds; /* For synchronized commands only. */
+    atomic_t pending_ops; /* Pending operations: For synchronized commands and chardev operations. */
     struct timer_list restart_timer;
     struct pcan_time_ref time_ref;
     struct delayed_work destroy_work;
@@ -128,5 +127,11 @@ static inline void usbdrv_default_completion(struct urb *urb)
  *  01. Add usbdrv_alloc_urbs().
  *  02. Add and modify some fields in struct usb_forwarder
  *      to support both chardev and netdev interfaces.
+ *
+ * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
+ *  01. Change the value of PCAN_USB_END_CHECK_INTERVAL_MS from 20 to 500.
+ *  02. Remove the unused field usb_intf from struct usb_forwarder.
+ *  03. Rename a field of struct usb_forwarder from pending_cmds to pending_ops
+ *      for wider use.
  */
 
