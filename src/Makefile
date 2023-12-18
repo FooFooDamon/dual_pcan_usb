@@ -30,7 +30,7 @@ EVAL_VERSION_ONCE := Y
 #export DRVNAME ?= dual_pcan_usb
 export DRVNAME ?= pcan
 export ${DRVNAME}-objs ?= main.o usb_driver.o can_commands.o \
-    packet_codec.o netdev_interfaces.o chardev_interfaces.o \
+    packet_codec.o netdev_operations.o chardev_operations.o \
     chardev_ioctl.o chardev_sysfs.o \
     $(addprefix ../3rdpary/lazy_coding/c_and_cpp/native/, chardev_group.o devclass_supplements.o)
 ccflags-y += -I${THIRD_PARTY_DIR}/${LCS_ALIAS}/c_and_cpp/native

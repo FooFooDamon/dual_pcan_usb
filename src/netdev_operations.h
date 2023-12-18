@@ -1,14 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
 /*
- * Netdev interfaces of PCAN-USB.
+ * Netdev operations of PCAN-USB.
  *
  * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
-#ifndef __NETDEV_INTERFACES_H__
-#define __NETDEV_INTERFACES_H__
+#ifndef __NETDEV_OPERATIONS_H__
+#define __NETDEV_OPERATIONS_H__
 
 struct can_clock;
 struct can_bittiming_const;
@@ -32,7 +32,7 @@ int pcan_net_set_can_mode(struct net_device *netdev, enum can_mode mode);
 
 void pcan_net_set_ops(struct net_device *netdev);
 
-#endif /* #ifndef __NETDEV_INTERFACES_H__ */
+#endif /* #ifndef __NETDEV_OPERATIONS_H__ */
 
 /*
  * ================
@@ -56,5 +56,8 @@ void pcan_net_set_ops(struct net_device *netdev);
  *
  * >>> 2023-11-30, Man Hung-Coeng <udc577@126.com>:
  *  01. Add pcan_net_dev_close().
+ *
+ * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
+ *  01. Rename this file from netdev_interfaces.h to netdev_operations.h.
  */
 

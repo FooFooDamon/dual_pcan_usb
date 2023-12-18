@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
 
 /*
- * Implementation of netdev interfaces of PCAN-USB.
+ * Implementation of netdev operations of PCAN-USB.
  *
  * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
-#include "netdev_interfaces.h"
+#include "netdev_operations.h"
 
 #include <linux/version.h>
 #include <linux/rtnetlink.h> /* For rtnl_lock() and rtnl_unlock() in old versions. */
@@ -405,5 +405,8 @@ void pcan_net_set_ops(struct net_device *netdev)
  *
  * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
  *  01. Clear time_ref before turning on CAN bus in start_can_interface().
+ *
+ * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
+ *  01. Rename this file from netdev_interfaces.c to netdev_operations.c.
  */
 

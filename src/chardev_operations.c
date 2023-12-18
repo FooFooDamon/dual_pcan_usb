@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
 
 /*
- * Implementation of chardev interfaces of PCAN-USB.
+ * Implementation of chardev operations of PCAN-USB.
  *
  * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
-#include "chardev_interfaces.h"
+#include "chardev_operations.h"
 
 #include <linux/poll.h>
 
@@ -358,5 +358,8 @@ const struct file_operations* get_file_operations(void)
  * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
  *  01. Add pcan_chardev_initialize() and pcan_chardev_finalize().
  *  02. Implement pcan_chardev_poll(), *_read() and *_ioctl().
+ *
+ * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
+ *  01. Rename this file from chardev_interfaces.c to chardev_operations.c.
  */
 

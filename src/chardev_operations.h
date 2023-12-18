@@ -1,14 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
 /*
- * Chardev interfaces of PCAN-USB.
+ * Chardev operations of PCAN-USB.
  *
  * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
-#ifndef __CHARDEV_INTERFACES_H__
-#define __CHARDEV_INTERFACES_H__
+#ifndef __CHARDEV_OPERATIONS_H__
+#define __CHARDEV_OPERATIONS_H__
 
 #include <linux/can.h>
 #include <linux/cdev.h>
@@ -52,7 +52,7 @@ void pcan_chardev_finalize(pcan_chardev_t *dev);
 
 const struct file_operations* get_file_operations(void);
 
-#endif /* #ifndef __CHARDEV_INTERFACES_H__ */
+#endif /* #ifndef __CHARDEV_OPERATIONS_H__ */
 
 /*
  * ================
@@ -69,5 +69,8 @@ const struct file_operations* get_file_operations(void);
  * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
  *  01. Add pcan_chardev_initialize() and pcan_chardev_finalize().
  *  02. Add some fields to struct pcan_chardev for ioctl() implementation.
+ *
+ * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
+ *  01. Rename this file from chardev_interfaces.h to chardev_operations.h.
  */
 

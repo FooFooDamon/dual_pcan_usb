@@ -15,7 +15,7 @@
 #include <linux/can/dev.h> /* struct can_priv */
 #include <linux/usb.h> /* struct urb, usb_* */
 
-#include "chardev_interfaces.h" /* struct pcan_chardev */
+#include "chardev_operations.h" /* struct pcan_chardev */
 #include "packet_codec.h" /* struct pcan_time_ref */
 
 #define PCAN_USB_STAGE_DISCONNECTED         0
