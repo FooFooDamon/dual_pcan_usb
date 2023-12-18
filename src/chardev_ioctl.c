@@ -118,7 +118,7 @@ DECLARE_IOCTL_HANDLE_FUNC(get_diagnostic_info)
 {
     pcan_chardev_t *dev = &forwarder->char_dev;
     pcan_ioctl_diag_t diag = {
-        .hardware_type = 11, /* 11 means PCAN-USB (no -FD or -Pro suffix). */
+        .hardware_type = PRODUCT_TYPE,
         .base = dev->serial_number,
         .irq_level = dev->device_id,
         .read_count = dev->rx_packets,
@@ -291,7 +291,7 @@ DECLARE_IOCTL_HANDLE_FUNC(fd_get_state)
         .bus_state = PCANFD_ERROR_ACTIVE, /* TODO: More possibilities in future. */
         .device_id = dev->device_id,
         .open_counter = atomic_read(&dev->open_count),
-        .hw_type = 11, /* FIXME: Or 18 ?? */
+        .hw_type = PRODUCT_TYPE,
         .channel_number = MINOR(file->f_inode->i_rdev) - DEV_MINOR_BASE,
         .can_status = 0, /* TODO: More possibilities in future. */
         .bus_load = 0xffff, /* FIXME: 0xffff means "not given". Maybe give it in future. */

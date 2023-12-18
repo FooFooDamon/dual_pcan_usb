@@ -21,6 +21,8 @@
 #include "chardev_interfaces.h"
 #include "chardev_group.h"
 #include "chardev_ioctl.h"
+#include "chardev_sysfs.h"
+#include "devclass_supplements.h"
 #include "evol_kernel.h"
 
 #define PCAN_USB_MSG_TIMEOUT_MS         1000
@@ -65,18 +67,41 @@ static struct usb_driver s_driver = {
 
 int usbdrv_register(void)
 {
+    const struct class_attribute *CLS_ATTRS = pcan_class_attributes();
+    struct class *cls;
     int ret;
 
     if (IS_ERR(CHRDEV_GRP_CREATE(__DRVNAME__, DEV_MINOR_BASE, 8, get_file_operations())))
-        ret = PTR_ERR(THIS_CHRDEV_GRP);
-    else
     {
-        if ((ret = usb_register(&s_driver)) < 0)
-        {
-            pr_err_v("usb_register() failed: %d\n", ret);
-            CHRDEV_GRP_DESTROY(NULL);
-        }
+        ret = PTR_ERR(THIS_CHRDEV_GRP);
+        goto lbl_reg_exit;
     }
+
+    cls = (struct class *)CHRDEV_GRP_GET_PROPERTY("class");
+
+    if ((ret = class_create_files(cls, CLS_ATTRS)) < 0)
+    {
+        pr_err_v("class_create_files() failed: %d\n", ret);
+        goto lbl_destroy_chrdev_grp;
+    }
+
+    if ((ret = usb_register(&s_driver)) < 0)
+    {
+        pr_err_v("usb_register() failed: %d\n", ret);
+        goto lbl_remove_cls_grps;
+    }
+
+    return 0;
+
+lbl_remove_cls_grps:
+
+    class_remove_files(cls, CLS_ATTRS);
+
+lbl_destroy_chrdev_grp:
+
+    CHRDEV_GRP_DESTROY(NULL);
+
+lbl_reg_exit:
 
     return ret;
 }
@@ -84,6 +109,7 @@ int usbdrv_register(void)
 void usbdrv_unregister(void)
 {
     usb_deregister(&s_driver);
+    class_remove_files(CHRDEV_GRP_GET_PROPERTY("class"), pcan_class_attributes());
     CHRDEV_GRP_DESTROY(NULL);
 }
 
@@ -432,17 +458,23 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     if ((err = pcan_chardev_initialize(&forwarder->char_dev)) < 0)
         goto lbl_unreg_can;
 
+    if ((err = sysfs_create_files(&forwarder->char_dev.device->kobj, pcan_device_attributes())) < 0)
+    {
+        dev_err_v(&interface->dev, "sysfs_create_files() failed: %d\n", err);
+        goto lbl_unreg_chardev;
+    }
+
     init_usb_anchor(&forwarder->anchor_rx_submitted);
     init_usb_anchor(&forwarder->anchor_tx_submitted);
     atomic_set(&forwarder->active_tx_urbs, 0);
     if ((err = usbdrv_alloc_urbs(forwarder)) < 0)
-        goto lbl_unreg_chardev;
+        goto lbl_remove_dev_attrs;
 
     if ((err = get_device_info(forwarder)) < 0)
-        goto lbl_unreg_chardev;
+        goto lbl_remove_dev_attrs;
 
     if ((err = usbdrv_reset_bus(forwarder, /* is_on = */0)) < 0)
-        goto lbl_unreg_chardev;
+        goto lbl_remove_dev_attrs;
 
     pcan_cmd_set_bitrate(forwarder, bitrate);
     if (net_up)
@@ -453,6 +485,10 @@ static int pcan_usb_plugin(struct usb_interface *interface, const struct usb_dev
     dev_notice_v(&interface->dev, "New PCAN-USB device plugged in\n");
 
     return 0;
+
+lbl_remove_dev_attrs:
+
+    sysfs_remove_files(&forwarder->char_dev.device->kobj, pcan_device_attributes());
 
 lbl_unreg_chardev:
 
@@ -550,6 +586,7 @@ static void pcan_usb_plugout(struct usb_interface *interface)
     if (NULL != forwarder)
     {
         atomic_set(&forwarder->stage, PCAN_USB_STAGE_DISCONNECTED); /* atomic_dec(&forwarder->stage); */
+        sysfs_remove_files(&forwarder->char_dev.device->kobj, pcan_device_attributes());
         pcan_chardev_finalize(&forwarder->char_dev);
         unregister_candev(forwarder->net_dev);
         usb_set_intfdata(interface, NULL);
@@ -628,5 +665,8 @@ static void pcan_usb_plugout(struct usb_interface *interface)
  *
  * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
  *  01. Adjust some operations according the need of chardev ioctl.
+ *
+ * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add sysfs attributes.
  */
 

@@ -36,6 +36,7 @@ module_exit(pcan_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Man Hung-Coeng <udc577@126.com>");
+MODULE_VERSION(DRIVER_VERSION "-" __VER__);
 
 /*
  * ================
@@ -53,5 +54,8 @@ MODULE_AUTHOR("Man Hung-Coeng <udc577@126.com>");
  *
  * >>> 2023-11-10, Man Hung-Coeng <udc577@126.com>:
  *  01. Replace DEV_NAME with __DRVNAME__.
+ *
+ * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
+ *  01. Define module version.
  */
 

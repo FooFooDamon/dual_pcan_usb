@@ -24,9 +24,11 @@ extern "C" {
 
 #define DEV_NAME                "pcanusb"
 #define DEV_MINOR_BASE          32
+#define DEV_TYPE                "usb"
 
 #define VENDOR_ID               0x0c72
 #define PRODUCT_ID              0x000c
+#define PRODUCT_TYPE            11
 
 #define DEFAULT_BIT_RATE        1000000
 
@@ -56,5 +58,8 @@ extern "C" {
  * >>> 2023-11-10, Man Hung-Coeng <udc577@126.com>:
  *  01. Change the value of macro DEV_NAME from "dual_pcan_usb" to "pcanusb".
  *  02. Add a new macro DEFAULT_BIT_RATE.
+ *
+ * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add DEV_TYPE and PRODUCT_TYPE macros.
  */
 

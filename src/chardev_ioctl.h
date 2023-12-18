@@ -62,7 +62,7 @@ typedef struct pcan_ioctl_status
 
 typedef struct pcan_ioctl_diag
 {
-	__u16 hardware_type;                /* fixed to 11 */
+	__u16 hardware_type;                /* fixed to PRODUCT_TYPE (in common.h) */
 	__u32 base;                         /* base address or port of this device */
 	__u16 irq_level;                    /* irq level of this device */
 	__u32 read_count;                   /* counts all reads to this device from start */
@@ -224,7 +224,7 @@ typedef struct pcanfd_ioctl_state {
     __u32 open_counter;                 /* open() counter */
     __u32 filters_counter;              /* count of message filters */
 
-    __u16 hw_type;                      /* pcan hareware type, fixed to 11 (or 18 ??) */
+    __u16 hw_type;                      /* pcan hareware type, fixed to PRODUCT_TYPE (in common.h) */
     __u16 channel_number;               /* channel number for the device */
 
     __u16 can_status;                   /* same as wCANStatus but NOT CLEARED */
