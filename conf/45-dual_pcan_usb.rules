@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL 2.0
+
+#
+# Udev rules for Dual-interface PCAN-USB driver.
+#
+# Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
+#
+
+KERNEL=="pcanusb*", ACTION=="add", MODE="0666"
+
