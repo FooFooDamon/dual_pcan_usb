@@ -27,7 +27,6 @@ EVAL_VERSION_ONCE := Y
 
 
 # export CROSS_KERNEL_DIR := ${HOME}/src/linux
-#export DRVNAME ?= dual_pcan_usb
 export DRVNAME ?= pcan
 export ${DRVNAME}-objs ?= main.o usb_driver.o can_commands.o \
     packet_codec.o netdev_operations.o chardev_operations.o \
@@ -38,12 +37,52 @@ ifneq ($(filter-out n N no NO No 0, ${INNER_TEST}),)
     ccflags-y += -DINNER_TEST
 endif
 export USE_SRC_RELATIVE_PATH := 1
-export APP_NAME := ${DRVNAME}
+export APP_NAME := ${DRVNAME}_test
 export APP_OBJS := setting_app.o
 export APP_INCLUDES := -I${THIRD_PARTY_DIR}/${LCS_ALIAS}/c_and_cpp/native
 export OTHER_APP_CFLAGS := -std=c99
 
 -include ${THIRD_PARTY_DIR}/${LCS_ALIAS}/makefile/linux_driver.mk
+
+
+
+
+export DKMS_CONF := ../dkms.conf
+export DKMS_PKG_NAME := dual_pcan_usb
+export DKMS_PKG_VER ?= $(shell \
+    grep "#define[ ]\+DRV_VER_\(MAJOR\|MINOR\|RELEASE\)" versions.h \
+    | awk '{ print $$3 }' \
+    | sed 'N; s/\n/./; N; s/\n/./' \
+)-${__VER__}
+
+.PHONY: install uninstall ${DKMS_CONF}
+
+install: ${DKMS_CONF}
+	$(if ${Q},@printf '>>> INSTALL: Begin.\n')
+	${Q}[ -f /etc/modprobe.d/${DRVNAME}.conf ] || install -p -m 644 ../conf/${DRVNAME}.conf /etc/modprobe.d/
+	${Q}install -p -m 644 ../conf/blacklist-peak_system.conf /etc/modprobe.d/
+	${Q}install -p -m 644 ../conf/45-dual_pcan_usb.rules /etc/udev/rules.d/ && udevadm control --reload-rules
+	${Q}ln -snf $$(realpath $${PWD}/..) /usr/src/${DKMS_PKG_NAME}-${DKMS_PKG_VER}
+	${Q}dkms install ${DKMS_PKG_NAME}/${DKMS_PKG_VER} -k $$(uname -r)
+	$(if ${Q},@printf '>>> INSTALL: Done.\n')
+
+uninstall:
+	$(if ${Q},@printf '>>> UNINSTALL: Begin.\n')
+	${Q}rm -f /etc/modprobe.d/${DRVNAME}.conf /etc/modprobe.d/blacklist-peak_system.conf
+	${Q}rm -f /etc/udev/rules.d/45-dual_pcan_usb.rules && udevadm control --reload-rules
+	${Q}-dkms remove ${DKMS_PKG_NAME}/${DKMS_PKG_VER} --all
+	${Q}rm -f /usr/src/${DKMS_PKG_NAME}-${DKMS_PKG_VER}
+	$(if ${Q},@printf '>>> UNINSTALL: Done.\n')
+
+${DKMS_CONF}:
+	${Q}echo 'PACKAGE_NAME="${DKMS_PKG_NAME}"' > ${DKMS_CONF}
+	${Q}echo 'PACKAGE_VERSION="${DKMS_PKG_VER}"' >> ${DKMS_CONF}
+	${Q}echo 'CLEAN="make clean"' >> ${DKMS_CONF}
+	${Q}echo "MAKE[0]=\"'make'\"" >> ${DKMS_CONF}
+	${Q}echo 'BUILT_MODULE_NAME[0]="${DRVNAME}"' >> ${DKMS_CONF}
+	${Q}echo 'BUILT_MODULE_LOCATION[0]="src"' >> ${DKMS_CONF}
+	${Q}echo 'DEST_MODULE_LOCATION[0]="/updates"' >> ${DKMS_CONF}
+	${Q}echo 'AUTOINSTALL="yes"' >> ${DKMS_CONF}
 
 
 
