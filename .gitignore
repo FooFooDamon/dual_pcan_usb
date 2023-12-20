@@ -49,4 +49,5 @@ modules.order
 
 3rdpary/*
 !3rdpary/*.mk
+/dkms.conf
 
