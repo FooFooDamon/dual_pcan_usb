@@ -63,7 +63,7 @@ install: ${DKMS_CONF}
 	${Q}install -p -m 644 ../conf/blacklist-peak_system.conf /etc/modprobe.d/
 	${Q}install -p -m 644 ../conf/45-dual_pcan_usb.rules /etc/udev/rules.d/ && udevadm control --reload-rules
 	${Q}ln -snf $$(realpath $${PWD}/..) /usr/src/${DKMS_PKG_NAME}-${DKMS_PKG_VER}
-	${Q}dkms install ${DKMS_PKG_NAME}/${DKMS_PKG_VER} -k $$(uname -r)
+	${Q}dkms install --force ${DKMS_PKG_NAME}/${DKMS_PKG_VER} -k $$(uname -r)
 	$(if ${Q},@printf '>>> INSTALL: Done.\n')
 
 uninstall:
