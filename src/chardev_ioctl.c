@@ -370,15 +370,21 @@ DECLARE_IOCTL_HANDLE_FUNC(fd_recv_msgs)
 
         for (i = 0; i < msgp->count; ++i)
         {
-            struct can_frame *f = &dev->rx_msgs[read_index].frame;
+            pcan_chardev_msg_t *rx_msg = &dev->rx_msgs[read_index];
+            struct can_frame *f = &rx_msg->frame;
             pcanfd_ioctl_msg_t *m = &msgp->list[i];
+            struct timespec64 tspec = forwarder->bus_up_time;
 
             m->id = f->can_id & CAN_EFF_MASK; /* FIXME: It should have been okay even if not using CAN_EFF_MASK. */
             m->data_len = f->can_dlc;
             memcpy(m->data, f->data, m->data_len);
             m->type = PCANFD_TYPE_CAN20_MSG; /* FIXME: More possibilities in future. */
             m->flags = get_msgtype_from_canid(f->can_id); /* FIXME: Also decided by the type above. */
-            /* TODO: timestamp and ctrlr_data */
+            m->flags |= PCANFD_TIMESTAMP | PCANFD_HWTIMESTAMP;
+            timespec64_add_ns(&tspec, ktime_to_ns(ktime_sub(rx_msg->hwtstamp, forwarder->time_ref.tv_host_0)));
+            m->timestamp.tv_sec = tspec.tv_sec;
+            m->timestamp.tv_usec = tspec.tv_nsec / 1000;
+            /* TODO: ctrlr_data */
 
             read_index = (read_index + 1) % PCAN_CHRDEV_MAX_RX_BUF_COUNT;
         }
@@ -443,7 +449,7 @@ DECLARE_IOCTL_HANDLE_FUNC(fd_get_option)
         break;
 
     case PCANFD_OPT_HWTIMESTAMP_MODE:
-        u32_val = PCANFD_OPT_HWTIMESTAMP_OFF;
+        u32_val = PCANFD_OPT_HWTIMESTAMP_RAW;
         break;
 
     default:
@@ -520,5 +526,8 @@ const ioctl_handler_t G_FD_IOCTL_HANDLERS[] = {
  *
  * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
  *  01. Create.
+ *
+ * >>> 2023-12-23, Man Hung-Coeng <udc577@126.com>:
+ *  01. Implement the timestamp calculation for ioctl message reception.
  */
 

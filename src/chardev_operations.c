@@ -92,6 +92,7 @@ static int pcan_chardev_open(struct inode *inode, struct file *file)
         return 0;
 
     memset(&forwarder->time_ref, 0, sizeof(forwarder->time_ref));
+    ktime_get_real_ts64(&forwarder->bus_up_time);
 
     err = (dev_revision > 3) ? pcan_cmd_set_silent(forwarder, forwarder->can.ctrlmode & CAN_CTRLMODE_LISTENONLY) : 0;
     if (err || (err = pcan_cmd_set_ext_vcc(forwarder, /* is_on = */0))
@@ -361,5 +362,8 @@ const struct file_operations* get_file_operations(void)
  *
  * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
  *  01. Rename this file from chardev_interfaces.c to chardev_operations.c.
+ *
+ * >>> 2023-12-23, Man Hung-Coeng <udc577@126.com>:
+ *  01. Mark the CAN bus active time point in open function.
  */
 

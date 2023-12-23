@@ -63,6 +63,7 @@ typedef struct usb_forwarder
     atomic_t pending_ops; /* Pending operations: For synchronized commands and chardev operations. */
     struct timer_list restart_timer;
     struct pcan_time_ref time_ref;
+    struct timespec64 bus_up_time; /* The time point when CAN bus is brought up. */
     struct delayed_work destroy_work;
 } usb_forwarder_t;
 
@@ -133,5 +134,8 @@ static inline void usbdrv_default_completion(struct urb *urb)
  *  02. Remove the unused field usb_intf from struct usb_forwarder.
  *  03. Rename a field of struct usb_forwarder from pending_cmds to pending_ops
  *      for wider use.
+ *
+ * >>> 2023-12-23, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add a new field "bus_up_time" to struct usb_forwarder.
  */
 

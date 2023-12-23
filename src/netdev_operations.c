@@ -187,6 +187,7 @@ static int start_can_interface(struct net_device *netdev)
         goto lbl_start_ok;
 
     memset(&forwarder->time_ref, 0, sizeof(forwarder->time_ref));
+    ktime_get_real_ts64(&forwarder->bus_up_time);
 
     err = (dev_revision > 3) ? pcan_cmd_set_silent(forwarder, forwarder->can.ctrlmode & CAN_CTRLMODE_LISTENONLY) : 0;
     if (err || (err = pcan_cmd_set_ext_vcc(forwarder, /* is_on = */0)))
@@ -408,5 +409,8 @@ void pcan_net_set_ops(struct net_device *netdev)
  *
  * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
  *  01. Rename this file from netdev_interfaces.c to netdev_operations.c.
+ *
+ * >>> 2023-12-23, Man Hung-Coeng <udc577@126.com>:
+ *  01. Mark the CAN bus active time point in open function.
  */
 

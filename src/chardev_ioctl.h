@@ -271,6 +271,13 @@ struct pcan_timeval
 #define PCANFD_MSG_SNG                  0x00000008
 #define PCANFD_MSG_ECHO                 0x00000010
 
+/* new bits indicate valid values in the corresponding fields */
+#define PCANFD_TIMESTAMP                0x01000000
+#define PCANFD_HWTIMESTAMP              0x02000000
+#define PCANFD_ERRCNT                   0x10000000
+#define PCANFD_BUSLOAD                  0x20000000
+#define PCANFD_OVRCNT                   0x40000000
+
 /* [PCANFD_TYPE_STATUS]
  *
  * flags bits definition: indicate the kind of error/status:
@@ -456,5 +463,8 @@ extern const ioctl_handler_t G_FD_IOCTL_HANDLERS[];
  *
  * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
  *  01. Create.
+ *
+ * >>> 2023-12-23, Man Hung-Coeng <udc577@126.com>:
+ *  01. Add new flags indicating timestamp, error/overrun counts and bus load.
  */
 
