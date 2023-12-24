@@ -38,9 +38,9 @@ ifneq ($(filter-out n N no NO No 0, ${INNER_TEST}),)
 endif
 export USE_SRC_RELATIVE_PATH := 1
 export APP_NAME := ${DRVNAME}_test
-export APP_OBJS := setting_app.o
+export APP_OBJS := setting_app.o $(addprefix ../3rdpary/lazy_coding/c_and_cpp/native/, signal_handling.o)
 export APP_INCLUDES := -I${THIRD_PARTY_DIR}/${LCS_ALIAS}/c_and_cpp/native
-export OTHER_APP_CFLAGS := -std=c99
+export OTHER_APP_CFLAGS := -std=gnu99
 
 -include ${THIRD_PARTY_DIR}/${LCS_ALIAS}/makefile/linux_driver.mk
 
