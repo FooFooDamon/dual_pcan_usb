@@ -17,6 +17,8 @@ export CHKOUT_PARTIAL_ITEMS := main/c_and_cpp/native/__ver__.h \
     73a04dd9a2a6f44bc4100951eeebcdbb91f4437c/c_and_cpp/native/chardev_group.h \
     9077ab1f647f017bb982eb0bacf08698386e8f84/c_and_cpp/native/devclass_supplements.c \
     9077ab1f647f017bb982eb0bacf08698386e8f84/c_and_cpp/native/devclass_supplements.h \
+    38cf125e08241b9330812f6b040a072b6116adf6/c_and_cpp/native/signal_handling.c \
+    38cf125e08241b9330812f6b040a072b6116adf6/c_and_cpp/native/signal_handling.h \
     0ec0fc48ae88c0a69f8378691c30ba5ad0d19a7b/python/ycm_conf_for_c_and_cpp.py \
     a85cce2c2cc8ac1725a3cad7af09c71f8a6b5a89/python/ycm_conf_for_linux_driver.py \
     # Add more items ahead of this line if needed. \
