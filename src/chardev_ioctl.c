@@ -56,16 +56,16 @@ DECLARE_IOCTL_HANDLE_FUNC(read_msg)
     pcan_chardev_t *dev = &forwarder->char_dev;
     unsigned long lock_flags;
     pcan_ioctl_rd_msg_t msg;
-    int unread_msgs = 0;
+    int err = 0;
 
     if (file->f_flags & O_NONBLOCK)
     {
-        if ((unread_msgs = atomic_read(&dev->rx_unread_cnt)) <= 0)
+        if (atomic_read(&dev->rx_unread_cnt) <= 0)
             return -EAGAIN;
     }
     else
     {
-        int err = wait_event_interruptible(dev->wait_queue_rd,
+        err = wait_event_interruptible(dev->wait_queue_rd,
             atomic_read(&dev->rx_unread_cnt) > 0 || atomic_read(&forwarder->stage) < PCAN_USB_STAGE_ONE_STARTED);
 
         if (err)
@@ -74,37 +74,43 @@ DECLARE_IOCTL_HANDLE_FUNC(read_msg)
         if (unlikely(atomic_read(&forwarder->stage) < PCAN_USB_STAGE_ONE_STARTED)) /* Has been plugged out. */
             return -ENODEV;
 
-        if (unlikely((unread_msgs = atomic_read(&dev->rx_unread_cnt)) <= 0))
+        if (unlikely(atomic_read(&dev->rx_unread_cnt) <= 0))
             return signal_pending(current) ? -ERESTARTSYS/*-EINTR*/ : -EAGAIN;
     }
 
     spin_lock_irqsave(&dev->lock, lock_flags);
     {
+        int unread_msgs = atomic_read(&dev->rx_unread_cnt);
         int read_index = pcan_chardev_calc_rx_read_index(atomic_read(&dev->rx_write_idx), unread_msgs);
         struct can_frame *frame = &dev->rx_msgs[read_index].frame;
         s64 hardware_timestamp = ktime_to_ns(dev->rx_msgs[read_index].hwtstamp);
 
-        msg.msg.id = frame->can_id;
-        msg.msg.type = get_msgtype_from_canid(msg.msg.id); /* FIXME: Or fetch it from value passed by ioctl_init()? */
-        msg.msg.len = frame->can_dlc;
-        memcpy(&msg.msg.data, frame->data, msg.msg.len);
-#if BITS_PER_LONG >= 64
-        msg.time_msecs = hardware_timestamp / 1000000;
-        msg.remainder_usecs = hardware_timestamp / 1000 - msg.time_msecs * 1000;
-#else /* 64-bit divisions above will cause an error of "__aeabi_ldivmod undefined" on 32-bit ARM platforms. */
+        if (unlikely(unread_msgs <= 0))
+            err = -EAGAIN;
+        else
         {
-            u32 remainder_nsecs = do_div(hardware_timestamp, 1000000);
+            msg.msg.id = frame->can_id;
+            msg.msg.type = get_msgtype_from_canid(msg.msg.id); /* FIXME: Or fetch it from value passed by ioctl_init()? */
+            msg.msg.len = frame->can_dlc;
+            memcpy(&msg.msg.data, frame->data, msg.msg.len);
+#if BITS_PER_LONG >= 64
+            msg.time_msecs = hardware_timestamp / 1000000;
+            msg.remainder_usecs = hardware_timestamp / 1000 - msg.time_msecs * 1000;
+#else /* 64-bit divisions above will cause an error of "__aeabi_ldivmod undefined" on 32-bit ARM platforms. */
+            {
+                u32 remainder_nsecs = do_div(hardware_timestamp, 1000000);
 
-            msg.time_msecs = hardware_timestamp;
-            msg.remainder_usecs = remainder_nsecs / 1000;
-        }
+                msg.time_msecs = hardware_timestamp;
+                msg.remainder_usecs = remainder_nsecs / 1000;
+            }
 #endif
 
-        atomic_dec(&dev->rx_unread_cnt);
+            atomic_dec(&dev->rx_unread_cnt);
+        }
     }
     spin_unlock_irqrestore(&dev->lock, lock_flags);
 
-    return __copy_to_user(arg, &msg, sizeof(msg)) ? -EFAULT : 0;
+    return unlikely(err) ? err : (__copy_to_user(arg, &msg, sizeof(msg)) ? -EFAULT : 0);
 }
 
 DECLARE_IOCTL_HANDLE_FUNC(get_status)
@@ -328,16 +334,16 @@ DECLARE_IOCTL_HANDLE_FUNC(fd_recv_msgs)
     pcan_chardev_t *dev = &forwarder->char_dev;
     pcanfd_ioctl_msgs_t *msgp = dev->ioctl_rxmsgs;
     unsigned long lock_flags;
-    int unread_msgs = 0;
+    int err = 0;
 
     if (file->f_flags & O_NONBLOCK)
     {
-        if ((unread_msgs = atomic_read(&dev->rx_unread_cnt)) <= 0)
+        if (atomic_read(&dev->rx_unread_cnt) <= 0)
             return -EAGAIN;
     }
     else
     {
-        int err = wait_event_interruptible(dev->wait_queue_rd,
+        err = wait_event_interruptible(dev->wait_queue_rd,
             atomic_read(&dev->rx_unread_cnt) > 0 || atomic_read(&forwarder->stage) < PCAN_USB_STAGE_ONE_STARTED);
 
         if (err)
@@ -346,7 +352,7 @@ DECLARE_IOCTL_HANDLE_FUNC(fd_recv_msgs)
         if (unlikely(atomic_read(&forwarder->stage) < PCAN_USB_STAGE_ONE_STARTED)) /* Has been plugged out. */
             return -ENODEV;
 
-        if (unlikely((unread_msgs = atomic_read(&dev->rx_unread_cnt)) <= 0))
+        if (unlikely(atomic_read(&dev->rx_unread_cnt) <= 0))
             return signal_pending(current) ? -ERESTARTSYS/*-EINTR*/ : -EAGAIN;
     }
 
@@ -360,40 +366,46 @@ DECLARE_IOCTL_HANDLE_FUNC(fd_recv_msgs)
     if (unlikely(0 == msgp->count))
         return -EINVAL;
 
-    if (msgp->count > (u32)unread_msgs)
-        msgp->count = unread_msgs;
-
     spin_lock_irqsave(&dev->lock, lock_flags);
     {
+        int unread_msgs = atomic_read(&dev->rx_unread_cnt);
         int read_index = pcan_chardev_calc_rx_read_index(atomic_read(&dev->rx_write_idx), unread_msgs);
         typeof(msgp->count) i;
 
-        for (i = 0; i < msgp->count; ++i)
+        if (unlikely(unread_msgs <= 0))
+            err = -EAGAIN;
+        else
         {
-            pcan_chardev_msg_t *rx_msg = &dev->rx_msgs[read_index];
-            struct can_frame *f = &rx_msg->frame;
-            pcanfd_ioctl_msg_t *m = &msgp->list[i];
-            struct timespec64 tspec = forwarder->bus_up_time;
+            if (msgp->count > (u32)unread_msgs)
+                msgp->count = unread_msgs;
 
-            m->id = f->can_id & CAN_EFF_MASK; /* FIXME: It should have been okay even if not using CAN_EFF_MASK. */
-            m->data_len = f->can_dlc;
-            memcpy(m->data, f->data, m->data_len);
-            m->type = PCANFD_TYPE_CAN20_MSG; /* FIXME: More possibilities in future. */
-            m->flags = get_msgtype_from_canid(f->can_id); /* FIXME: Also decided by the type above. */
-            m->flags |= PCANFD_TIMESTAMP | PCANFD_HWTIMESTAMP;
-            timespec64_add_ns(&tspec, ktime_to_ns(ktime_sub(rx_msg->hwtstamp, forwarder->time_ref.tv_host_0)));
-            m->timestamp.tv_sec = tspec.tv_sec;
-            m->timestamp.tv_usec = tspec.tv_nsec / 1000;
-            /* TODO: ctrlr_data */
+            for (i = 0; i < msgp->count; ++i)
+            {
+                pcan_chardev_msg_t *rx_msg = &dev->rx_msgs[read_index];
+                struct can_frame *f = &rx_msg->frame;
+                pcanfd_ioctl_msg_t *m = &msgp->list[i];
+                struct timespec64 tspec = forwarder->bus_up_time;
 
-            read_index = (read_index + 1) % PCAN_CHRDEV_MAX_RX_BUF_COUNT;
+                m->id = f->can_id & CAN_EFF_MASK; /* FIXME: It should have been okay even if not using CAN_EFF_MASK. */
+                m->data_len = f->can_dlc;
+                memcpy(m->data, f->data, m->data_len);
+                m->type = PCANFD_TYPE_CAN20_MSG; /* FIXME: More possibilities in future. */
+                m->flags = get_msgtype_from_canid(f->can_id); /* FIXME: Also decided by the type above. */
+                m->flags |= PCANFD_TIMESTAMP | PCANFD_HWTIMESTAMP;
+                timespec64_add_ns(&tspec, ktime_to_ns(ktime_sub(rx_msg->hwtstamp, forwarder->time_ref.tv_host_0)));
+                m->timestamp.tv_sec = tspec.tv_sec;
+                m->timestamp.tv_usec = tspec.tv_nsec / 1000;
+                /* TODO: ctrlr_data */
+
+                read_index = (read_index + 1) % PCAN_CHRDEV_MAX_RX_BUF_COUNT;
+            }
+
+            atomic_sub(msgp->count, &dev->rx_unread_cnt);
         }
-
-        atomic_sub(msgp->count, &dev->rx_unread_cnt);
     }
     spin_unlock_irqrestore(&dev->lock, lock_flags);
 
-    return unlikely(copy_to_user(arg, msgp, SIZE_OF_PCANFD_IOCTL_MSGS(msgp->count))) ? -EFAULT : 0;
+    return unlikely(err) ? err : (unlikely(copy_to_user(arg, msgp, SIZE_OF_PCANFD_IOCTL_MSGS(msgp->count))) ? -EFAULT : 0);
 }
 
 static inline const char* pcanfd_option_name(int index)
@@ -529,5 +541,9 @@ const ioctl_handler_t G_FD_IOCTL_HANDLERS[] = {
  *
  * >>> 2023-12-23, Man Hung-Coeng <udc577@126.com>:
  *  01. Implement the timestamp calculation for ioctl message reception.
+ *
+ * >>> 2023-12-28, Man Hung-Coeng <udc577@126.com>:
+ *  01. Optimize the logic of fetching the counter of unread messages,
+ *      which can avoid missing some messages due to the old value of counter.
  */
 
