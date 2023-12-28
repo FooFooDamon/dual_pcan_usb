@@ -9,7 +9,9 @@
 
 #include "chardev_operations.h"
 
+#include <linux/module.h>
 #include <linux/poll.h>
+#include <linux/highmem.h> /* For kmap() series. */
 
 #include "versions.h"
 #include "common.h"
@@ -19,6 +21,17 @@
 #include "chardev_ioctl.h"
 #include "usb_driver.h"
 #include "evol_kernel.h"
+
+#define DEFAULT_TIMEZONE                8
+#define DEFAULT_MAP_UMEM_FLAG           0
+
+static s16 timezone = DEFAULT_TIMEZONE;
+module_param(timezone, short, 0644);
+MODULE_PARM_DESC(timezone, " time zone (default: " __stringify(DEFAULT_TIMEZONE) ")");
+
+static bool map_umem = DEFAULT_MAP_UMEM_FLAG;
+module_param(map_umem, bool, 0644);
+MODULE_PARM_DESC(map_umem, " whether to map user-space memory (default: " __stringify(DEFAULT_MAP_UMEM_FLAG) ")");
 
 int pcan_chardev_initialize(pcan_chardev_t *dev)
 {
@@ -39,12 +52,45 @@ int pcan_chardev_initialize(pcan_chardev_t *dev)
 
     init_waitqueue_head(&dev->wait_queue_rd);
     init_waitqueue_head(&dev->wait_queue_wr);
+    dev->rd_user_buf = NULL;
+    if (map_umem)
+        dev->rd_mapped_addr = NULL;
+    else
+    {
+        dev->rd_kernel_buf = kmalloc(PCAN_CHRDEV_MAX_BYTES_PER_READ * PCAN_CHRDEV_MAX_RX_BUF_COUNT + 1, GFP_KERNEL);
+        if (NULL == dev->rd_kernel_buf)
+        {
+            CHRDEV_GRP_UNMAKE_ITEM(dev->device, NULL);
+
+            return -ENOMEM;
+        }
+    }
 
     return 0;
 }
 
+static void unmap_user_readbuf_if_needed(pcan_chardev_t *dev)
+{
+    if (map_umem && dev->rd_mapped_addr)
+    {
+        struct page *user_page = kmap_to_page(dev->rd_mapped_addr);
+
+        kunmap(user_page);
+        put_page(user_page);
+        dev->rd_mapped_addr = NULL;
+    }
+    dev->rd_user_buf = NULL;
+}
+
 void pcan_chardev_finalize(pcan_chardev_t *dev)
 {
+    unmap_user_readbuf_if_needed(dev);
+    if (!map_umem && NULL != dev->rd_kernel_buf)
+    {
+        kfree(dev->rd_kernel_buf);
+        dev->rd_kernel_buf = NULL;
+    }
+
     CHRDEV_GRP_UNMAKE_ITEM(dev->device, NULL);
 }
 
@@ -116,6 +162,7 @@ static int pcan_chardev_release(struct inode *inode, struct file *file)
     {
         file->private_data = NULL;
         atomic_dec(&forwarder->char_dev.open_count);
+        unmap_user_readbuf_if_needed(&forwarder->char_dev);
         if (atomic_dec_return(&forwarder->stage) < PCAN_USB_STAGE_ONE_STARTED)
             /* err = */usbdrv_reset_bus(forwarder, /* is_on = */0);
     }
@@ -165,16 +212,13 @@ static unsigned int pcan_chardev_poll(struct file *file, poll_table *wait)
     return mask;
 }
 
+/* FIXME: Might be buggy ... Test it carefully with pcanusb_test.elf and cat! */
 static ssize_t pcan_chardev_read(struct file *file, char __user *buf, size_t count, loff_t *off)
 {
-#ifndef INNER_TEST
-    return -EOPNOTSUPP; /* The read logic of pcanview is not good. It's not worthwhile to support it. */
-#else
     usb_forwarder_t *forwarder = get_usb_forwarder_from_file(file);
     pcan_chardev_t *dev = likely(forwarder) ? &forwarder->char_dev : NULL;
     unsigned long lock_flags;
-    int unread_msgs = 0;
-    int err = likely(dev) ? ((count >= sizeof(pcan_chardev_msg_t)) ? 0 : -EINVAL) : -ENODEV;
+    int err = likely(dev) ? ((count > PCAN_CHRDEV_MAX_BYTES_PER_READ) ? 0 : -EINVAL) : -ENODEV;
 
     if (err)
         return err;
@@ -185,7 +229,7 @@ static ssize_t pcan_chardev_read(struct file *file, char __user *buf, size_t cou
 
     if (file->f_flags & O_NONBLOCK)
     {
-        if ((unread_msgs = atomic_read(&dev->rx_unread_cnt)) <= 0)
+        if (atomic_read(&dev->rx_unread_cnt) <= 0)
         {
             err = -EAGAIN;
             goto lbl_read_end;
@@ -204,52 +248,88 @@ static ssize_t pcan_chardev_read(struct file *file, char __user *buf, size_t cou
             goto lbl_read_end;
         }
 
-        if (unlikely((unread_msgs = atomic_read(&dev->rx_unread_cnt)) <= 0))
+        if (unlikely(atomic_read(&dev->rx_unread_cnt) <= 0))
         {
             err = signal_pending(current) ? -ERESTARTSYS/*-EINTR*/ : -EAGAIN;
             goto lbl_read_end;
         }
     }
 
+    if (map_umem && buf != dev->rd_user_buf)
+    {
+        struct page *user_page = NULL;
+
+        if (unlikely(!evol_access_ok(buf, count)))
+        {
+            err = -EINVAL;
+            dev_err_ratelimited_v(dev->device, "access_ok() returned false\n");
+            goto lbl_read_end;
+        }
+
+        unmap_user_readbuf_if_needed(dev);
+
+        err = get_user_pages_fast((unsigned long)buf, 1, FOLL_WRITE, &user_page);
+        if (err < 0)
+            goto lbl_read_end;
+
+        dev->rd_mapped_addr = (char *)kmap(user_page);
+        dev->rd_user_buf = buf;
+        dev_notice_ratelimited_v(dev->device, "Mapped read buffer: 0x%p -> 0x%p\n", buf, dev->rd_mapped_addr);
+    }
+
     spin_lock_irqsave(&dev->lock, lock_flags);
     {
+        char *buf_start = map_umem ? dev->rd_mapped_addr : dev->rd_kernel_buf;
+        char *ptr = buf_start;
+        int unread_msgs = atomic_read(&dev->rx_unread_cnt);
         int read_index = pcan_chardev_calc_rx_read_index(atomic_read(&dev->rx_write_idx), unread_msgs);
-        int msgs_to_read = count / sizeof(pcan_chardev_msg_t);
-        int forward_msgs = PCAN_CHRDEV_MAX_RX_BUF_COUNT - read_index;
-        int rewind_msgs;
+        int msgs_to_read = count / PCAN_CHRDEV_MAX_BYTES_PER_READ + ((count % PCAN_CHRDEV_MAX_BYTES_PER_READ) ? 0 : -1);
+        int i;
 
-        if (msgs_to_read > unread_msgs)
-            msgs_to_read = unread_msgs;
-
-        rewind_msgs = (msgs_to_read > forward_msgs) ? (msgs_to_read - forward_msgs) : 0;
-        if (rewind_msgs)
-        {
-            memcpy(&dev->rx_msgs[PCAN_CHRDEV_MAX_RX_BUF_COUNT], &dev->rx_msgs[read_index],
-                sizeof(pcan_chardev_msg_t) * forward_msgs);
-            memcpy(&dev->rx_msgs[PCAN_CHRDEV_MAX_RX_BUF_COUNT + forward_msgs], &dev->rx_msgs[0],
-                sizeof(pcan_chardev_msg_t) * rewind_msgs);
-        }
+        if (unlikely(unread_msgs <= 0))
+            err = -EAGAIN;
         else
         {
-            memcpy(&dev->rx_msgs[PCAN_CHRDEV_MAX_RX_BUF_COUNT], &dev->rx_msgs[read_index],
-                sizeof(pcan_chardev_msg_t) * msgs_to_read);
-        }
+            if (msgs_to_read > unread_msgs)
+                msgs_to_read = unread_msgs;
 
-        atomic_sub(msgs_to_read, &dev->rx_unread_cnt);
-        unread_msgs = msgs_to_read;
+            for (i = 0; i < msgs_to_read; ++i)
+            {
+                struct timespec64 tspec = forwarder->bus_up_time;
+                struct tm when;
+                pcan_chardev_msg_t *rx_msg = &dev->rx_msgs[read_index];
+                struct can_frame *f = &rx_msg->frame;
+                typeof(f->can_dlc) j;
+
+                timespec64_add_ns(&tspec, ktime_to_ns(ktime_sub(rx_msg->hwtstamp, forwarder->time_ref.tv_host_0)));
+                evol_time_to_tm(tspec.tv_sec, 60 * 60 * timezone, &when);
+                ptr += sprintf(ptr, "(%04ld-%02d-%02d %02d:%02d:%02d.%06ld)  %s  %08X  [%d] ",
+                    when.tm_year + 1900, when.tm_mon + 1, when.tm_mday, when.tm_hour, when.tm_min, when.tm_sec,
+                    tspec.tv_nsec / 1000, dev_name(dev->device), (f->can_id & CAN_EFF_MASK), f->can_dlc);
+                for (j = 0; j < f->can_dlc; ++j)
+                {
+                    ptr += sprintf(ptr, " %02X", f->data[j]);
+                }
+                *ptr++ = '\n';
+
+                read_index = (read_index + 1) % PCAN_CHRDEV_MAX_RX_BUF_COUNT;
+            }
+
+            atomic_sub(msgs_to_read, &dev->rx_unread_cnt);
+            err = ptr - buf_start;
+            ptr[err] = '\0';
+        }
     }
     spin_unlock_irqrestore(&dev->lock, lock_flags);
 
-    /* NOTE: copy_to_user() might sleep, don't call it with spin lock held. */
-    err = count - copy_to_user(buf, &dev->rx_msgs[PCAN_CHRDEV_MAX_RX_BUF_COUNT],
-        sizeof(pcan_chardev_msg_t) * unread_msgs);
+    if (!map_umem && err > 0)
+        err -= copy_to_user(buf, dev->rd_kernel_buf, err);
 
 lbl_read_end:
 
     atomic_dec(&forwarder->pending_ops);
 
     return err;
-#endif
 }
 
 static ssize_t pcan_chardev_write(struct file *file, const char __user *buf, size_t count, loff_t *off)
@@ -365,5 +445,8 @@ const struct file_operations* get_file_operations(void)
  *
  * >>> 2023-12-23, Man Hung-Coeng <udc577@126.com>:
  *  01. Mark the CAN bus active time point in open function.
+ *
+ * >>> 2023-12-28, Man Hung-Coeng <udc577@126.com>:
+ *  01. Re-implement the read function with character stream format.
  */
 
