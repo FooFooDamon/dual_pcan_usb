@@ -12,7 +12,7 @@ export CHKOUT_PARTIAL_ITEMS := main/c_and_cpp/native/__ver__.h \
     ce7741faa97430aecc3823fa3cf6801c9ba9f03a/makefile/__ver__.mk \
     961a8ad599580425a6e0dacd05cc2bccb0de49ac/makefile/linux_driver.mk \
     217ebcbe23a78dacf7491685ef2e121a0721eb62/c_and_cpp/native/klogging.h \
-    cf8d6071d6efcf148ddaa069ec0b347b1fd0192e/c_and_cpp/native/evol_kernel.h \
+    5a4cf8c6554177a1ece6ea81d097a60430df84c2/c_and_cpp/native/evol_kernel.h \
     73a04dd9a2a6f44bc4100951eeebcdbb91f4437c/c_and_cpp/native/chardev_group.c \
     73a04dd9a2a6f44bc4100951eeebcdbb91f4437c/c_and_cpp/native/chardev_group.h \
     9077ab1f647f017bb982eb0bacf08698386e8f84/c_and_cpp/native/devclass_supplements.c \
