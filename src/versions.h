@@ -33,7 +33,7 @@ extern "C" {
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION             "0.1.0"
+#define APP_VERSION             "0.2.0"
 #endif
 
 #ifdef __cplusplus
@@ -61,5 +61,8 @@ extern "C" {
  * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
  *  01. Add DRV_VER_* macros for separate parts of DRIVER_VERSION,
  *      and update its value to 0.8.0.
+ *
+ * >>> 2023-12-28, Man Hung-Coeng <udc577@126.com>:
+ *  01. Update APP_VERSION to 0.2.0.
  */
 
