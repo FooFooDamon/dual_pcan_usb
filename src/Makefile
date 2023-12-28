@@ -52,10 +52,10 @@ export DKMS_PKG_NAME := dual_pcan_usb
 export DKMS_PKG_VER ?= $(shell \
     grep "#define[ ]\+DRV_VER_\(MAJOR\|MINOR\|RELEASE\)" versions.h \
     | awk '{ print $$3 }' \
-    | sed 'N; s/\n/./; N; s/\n/./' \
-)-${__VER__}
+    | sed 'N; N; s/\n/./g' \
+)
 
-.PHONY: install uninstall ${DKMS_CONF}
+.PHONY: install uninstall update ${DKMS_CONF} dkms_purge
 
 install: ${DKMS_CONF}
 	$(if ${Q},@printf '>>> INSTALL: Begin.\n')
@@ -74,6 +74,8 @@ uninstall:
 	${Q}rm -f /usr/src/${DKMS_PKG_NAME}-${DKMS_PKG_VER}
 	$(if ${Q},@printf '>>> UNINSTALL: Done.\n')
 
+update: dkms_purge install
+
 ${DKMS_CONF}:
 	${Q}echo 'PACKAGE_NAME="${DKMS_PKG_NAME}"' > ${DKMS_CONF}
 	${Q}echo 'PACKAGE_VERSION="${DKMS_PKG_VER}"' >> ${DKMS_CONF}
@@ -83,6 +85,16 @@ ${DKMS_CONF}:
 	${Q}echo 'BUILT_MODULE_LOCATION[0]="src"' >> ${DKMS_CONF}
 	${Q}echo 'DEST_MODULE_LOCATION[0]="/updates"' >> ${DKMS_CONF}
 	${Q}echo 'AUTOINSTALL="yes"' >> ${DKMS_CONF}
+
+dkms_purge:
+	$(if ${Q},@printf '>>> DKMS-PURGE: Begin.\n')
+	${Q}-ls /usr/src/ | grep ${DKMS_PKG_NAME}- | while read i; \
+	do \
+		ii=$$(echo $${i} | sed 's/\(${DKMS_PKG_NAME}\)-/\1\//'); \
+		dkms remove $${ii}; \
+		rm /usr/src/$${i}; \
+	done
+	$(if ${Q},@printf '>>> DKMS-PURGE: Done.\n')
 
 
 
