@@ -7,7 +7,7 @@ from ycm_conf_for_c_and_cpp import flags as app_flags
 import ycm_conf_for_linux_driver
 
 APP_SRC_BASENAMES = [
-    "setting_app",
+    "test_app",
 ]
 
 def FlagsForFile(filename: str, **kwargs):
