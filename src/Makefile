@@ -91,7 +91,7 @@ dkms_purge:
 	${Q}-ls /usr/src/ | grep ${DKMS_PKG_NAME}- | while read i; \
 	do \
 		ii=$$(echo $${i} | sed 's/\(${DKMS_PKG_NAME}\)-/\1\//'); \
-		dkms remove $${ii}; \
+		dkms remove $${ii} --all; \
 		rm /usr/src/$${i}; \
 	done
 	$(if ${Q},@printf '>>> DKMS-PURGE: Done.\n')
