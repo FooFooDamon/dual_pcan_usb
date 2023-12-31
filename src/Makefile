@@ -50,7 +50,7 @@ export OTHER_APP_CFLAGS := -std=gnu99
 export DKMS_CONF := ../dkms.conf
 export DKMS_PKG_NAME := dual_pcan_usb
 export DKMS_PKG_VER ?= $(shell \
-    grep "#define[ ]\+DRV_VER_\(MAJOR\|MINOR\|RELEASE\)" versions.h \
+    grep "\#define[ ]\+DRV_VER_\(MAJOR\|MINOR\|RELEASE\)" versions.h \
     | awk '{ print $$3 }' \
     | sed 'N; N; s/\n/./g' \
 )
