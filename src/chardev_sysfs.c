@@ -1,7 +1,7 @@
 /*
  * Sysfs mechanism.
  *
- * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
+ * Copyright (c) 2023-2024 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
@@ -19,7 +19,11 @@
 extern "C" {
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
 static ssize_t version_show(struct class *cls, struct class_attribute *attr, char *buf)
+#else
+static ssize_t version_show(const struct class *cls, const struct class_attribute *attr, char *buf)
+#endif
 {
     return sprintf(buf, "%s\n", DRIVER_VERSION "-" __VER__);
 }
@@ -176,6 +180,9 @@ const struct attribute** pcan_device_attributes(void)
  * ================
  *
  * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
- *  01. Create.
+ *  01. Initial release.
+ *
+ * >>> 2024-06-22, Man Hung-Coeng <udc577@126.com>:
+ *  01. Fix the compilation error of version_show() on kernel 6.4.0 and above.
  */
 
