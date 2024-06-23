@@ -23,21 +23,21 @@
 ## 安装 | Installation
 
 ````
-$ make seeds && make init # Only needed at the first time
-$ sudo make install
+$ make prepare # Only needed at the first time
+$ sudo -E make install
 ````
 
 ## 卸载 | Uninstallation
 
 ````
-$ sudo make uninstall
+$ sudo -E make uninstall
 ````
 
 ## 更新 | Update
 
 ````
 $ git pull && git checkout vX.Y.Z # For example: v0.8.0
-$ sudo make update
+$ sudo -E make update
 ````
 
 ## 使用 | Use
