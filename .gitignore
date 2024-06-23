@@ -46,7 +46,11 @@ core.*
 *.cmd
 Module.symvers
 modules.order
+checkout.git.mk
+checkout.svn.mk
 
-3rdpary/*
+3rdparty/*
+!3rdparty/__chkout__
+!3rdparty/Makefile
 /dkms.conf
 
