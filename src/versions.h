@@ -3,7 +3,7 @@
 /*
  * Version codes.
  *
- * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
+ * Copyright (c) 2023-2024 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
@@ -25,7 +25,7 @@ extern "C" {
 #endif
 
 #ifndef DRV_VER_RELEASE
-#define DRV_VER_RELEASE         0
+#define DRV_VER_RELEASE         1
 #endif
 
 #ifndef DRIVER_VERSION
@@ -64,5 +64,8 @@ extern "C" {
  *
  * >>> 2023-12-28, Man Hung-Coeng <udc577@126.com>:
  *  01. Update APP_VERSION to 0.2.0.
+ *
+ * >>> 2024-06-23, Man Hung-Coeng <udc577@126.com>:
+ *  01. Driver v0.8.1.
  */
 
