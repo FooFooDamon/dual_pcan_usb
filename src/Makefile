@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 
 #
-# Makefile wrapper for Linux kernel porting project.
+# Makefile wrapper for out-of-tree Linux driver.
 #
 # Copyright (c) 2023-2024 Man Hung-Coeng <udc577@126.com>
 #
