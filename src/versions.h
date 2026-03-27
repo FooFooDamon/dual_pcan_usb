@@ -3,7 +3,7 @@
 /*
  * Version codes.
  *
- * Copyright (c) 2023-2024 Man Hung-Coeng <udc577@126.com>
+ * Copyright (c) 2023-2026 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
@@ -25,7 +25,7 @@ extern "C" {
 #endif
 
 #ifndef DRV_VER_RELEASE
-#define DRV_VER_RELEASE         1
+#define DRV_VER_RELEASE         2
 #endif
 
 #ifndef DRIVER_VERSION
@@ -48,7 +48,7 @@ extern "C" {
  * ================
  *
  * >>> 2023-07-19, Man Hung-Coeng <udc577@126.com>:
- *  01. Create.
+ *  01. Initial commit.
  *
  * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
  *  01. Reset DRIVER_VERSION and APP_VERSION to values
@@ -67,5 +67,8 @@ extern "C" {
  *
  * >>> 2024-06-23, Man Hung-Coeng <udc577@126.com>:
  *  01. Driver v0.8.1.
+ *
+ * >>> 2026-03-27, Man Hung-Coeng <udc577@126.com>:
+ *  01. Driver v0.8.2.
  */
 
