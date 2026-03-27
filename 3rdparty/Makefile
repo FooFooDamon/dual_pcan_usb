@@ -1,7 +1,7 @@
 #
 # For checking out 3rd-party projects.
 #
-# Copyright (c) 2024 Man Hung-Coeng <udc577@126.com>
+# Copyright (c) 2024-2026 Man Hung-Coeng <udc577@126.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ all prepare:
 	do \
 		mkdir -p $$(dirname $${i}); \
 		$(if ${Q},printf "WGET\t$$(basename $${i})\n";) \
-		[ -s $${i} ] || wget $(if ${Q},-q) -c -O $${i} "${LAZY_CODING_URL}/raw/main/makefile/$$(basename $${i})"; \
+		[ -s $${i} ] || wget $(if ${Q},-q) -c -O $${i} "${LAZY_CODING_URL}/raw/main/makefiles/$$(basename $${i})"; \
 	done
 	${Q}echo "~ ~ ~ Minimum preparation finished successfully ~ ~ ~"
 	${Q}echo "Re-run your command again to continue your work."
@@ -99,7 +99,7 @@ seeds:
 		echo "export CHKOUT_URL := $${CHKOUT_URL}" >> $${MKFILE}; \
 		echo "export CHKOUT_TAIL_PARAMS :=" >> $${MKFILE}; \
 		if [ "$${CHKOUT_ALIAS}" = "${LAZY_CODING_ALIAS}" ]; then \
-			echo "export CHKOUT_PARTIAL_ITEMS := main/makefile/__ver__.mk \\" >> $${MKFILE}; \
+			echo "export CHKOUT_PARTIAL_ITEMS := main/makefiles/__ver__.mk \\" >> $${MKFILE}; \
 			echo "    053ddeb138883b235d783803fd747fc596349071/c_and_cpp/native/__ver__.h \\" >> $${MKFILE}; \
 		else \
 			echo "export CHKOUT_PARTIAL_ITEMS := \\" >> $${MKFILE}; \

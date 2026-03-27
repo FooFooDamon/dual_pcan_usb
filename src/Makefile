@@ -3,7 +3,7 @@
 #
 # Makefile wrapper for out-of-tree Linux driver.
 #
-# Copyright (c) 2023-2024 Man Hung-Coeng <udc577@126.com>
+# Copyright (c) 2023-2026 Man Hung-Coeng <udc577@126.com>
 #
 
 .PHONY: all prepare dependencies
@@ -11,7 +11,7 @@
 # NOTE: Some paths must be absolute paths while some mustn't, and the rest don't care.
 LAZY_CODING_DIR := ../3rdparty/lazy_coding
 export LAZY_CODING_ABSDIR ?= $(abspath ${LAZY_CODING_DIR})
-export LAZY_CODING_MAKEFILES ?= $(addprefix ${LAZY_CODING_ABSDIR}/makefile/, __ver__.mk linux_driver.mk)
+export LAZY_CODING_MAKEFILES ?= $(addprefix ${LAZY_CODING_ABSDIR}/makefiles/, __ver__.mk linux_driver.mk)
 
 ifeq ($(shell [ true $(foreach i, ${LAZY_CODING_MAKEFILES}, -a -s ${i}) ] && echo 1 || echo 0),0)
 
@@ -21,7 +21,7 @@ all prepare: dependencies
 	@for i in ${LAZY_CODING_MAKEFILES}; \
 	do \
 		mkdir -p $$(dirname $${i}); \
-		[ -s $${i} ] || wget -c -O $${i} "${LAZY_CODING_URL}/raw/main/makefile/$$(basename $${i})"; \
+		[ -s $${i} ] || wget -c -O $${i} "${LAZY_CODING_URL}/raw/main/makefiles/$$(basename $${i})"; \
 	done
 	@echo "~ ~ ~ Minimum preparation finished successfully ~ ~ ~"
 	@echo "Re-run your command again to continue your work."
