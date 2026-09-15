@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 #ifndef DRV_VER_RELEASE
-#define DRV_VER_RELEASE         2
+#define DRV_VER_RELEASE         3
 #endif
 
 #ifndef DRIVER_VERSION
@@ -75,5 +75,6 @@ extern "C" {
  *
  * >>> 2026-09-15, Man Hung-Coeng <udc577@126.com>:
  *  01. Update macro __VER__ to __REVISION__.
+ *  02. Driver v0.8.3.
  */
 
