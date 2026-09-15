@@ -10,10 +10,12 @@
 #ifndef __VERSIONS_H__
 #define __VERSIONS_H__
 
-#include "__ver__.h"
-
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifndef __REVISION__
+#define __REVISION__            "<none>"
 #endif
 
 #ifndef DRV_VER_MAJOR
@@ -70,5 +72,8 @@ extern "C" {
  *
  * >>> 2026-03-27, Man Hung-Coeng <udc577@126.com>:
  *  01. Driver v0.8.2.
+ *
+ * >>> 2026-09-15, Man Hung-Coeng <udc577@126.com>:
+ *  01. Update macro __VER__ to __REVISION__.
  */
 

@@ -8,9 +8,9 @@ export CHKOUT_HASH :=
 export CHKOUT_STEM := main
 export CHKOUT_URL := https://github.com/FooFooDamon/lazy_coding_skills
 export CHKOUT_TAIL_PARAMS :=
-export CHKOUT_PARTIAL_ITEMS := main/c_and_cpp/native/__ver__.h \
-    5e3a7d172164f9df72e1855d44bf454bb1a9e88c/makefiles/__ver__.mk \
-    5e3a7d172164f9df72e1855d44bf454bb1a9e88c/makefiles/linux_driver.mk \
+export CHKOUT_PARTIAL_ITEMS := \
+    1939431b596dc36e9745440f12e043870658b043/makefiles/__revision__.mk \
+    1939431b596dc36e9745440f12e043870658b043/makefiles/linux_driver.mk \
     217ebcbe23a78dacf7491685ef2e121a0721eb62/c_and_cpp/native/klogging.h \
     5a4cf8c6554177a1ece6ea81d097a60430df84c2/c_and_cpp/native/evol_kernel.h \
     1fb9d6a00f89980ec4b9b72d056d58ca3bc752a6/c_and_cpp/native/chardev_group.c \

@@ -3,7 +3,7 @@
 /*
  * Entry point of driver.
  *
- * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
+ * Copyright (c) 2023-2026 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
@@ -20,7 +20,7 @@ static __init int pcan_init(void)
     int ret = usbdrv_register();
 
     if (0 == ret)
-        pr_notice("Initialized %s-%s.%s for Linux-%#x.\n", __DRVNAME__, DRIVER_VERSION, __VER__, LINUX_VERSION_CODE);
+        pr_notice("Initialized %s-%s.%s for Linux-%#x.\n", __DRVNAME__, DRIVER_VERSION, __REVISION__, LINUX_VERSION_CODE);
 
     return ret;
 }
@@ -28,7 +28,7 @@ static __init int pcan_init(void)
 static __exit void pcan_exit(void)
 {
     usbdrv_unregister();
-    pr_notice("Destroyed %s-%s.%s.\n", __DRVNAME__, DRIVER_VERSION, __VER__);
+    pr_notice("Destroyed %s-%s.%s.\n", __DRVNAME__, DRIVER_VERSION, __REVISION__);
 }
 
 module_init(pcan_init);
@@ -36,7 +36,7 @@ module_exit(pcan_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Man Hung-Coeng <udc577@126.com>");
-MODULE_VERSION(DRIVER_VERSION "-" __VER__);
+MODULE_VERSION(DRIVER_VERSION "-" __REVISION__);
 
 /*
  * ================
@@ -44,7 +44,7 @@ MODULE_VERSION(DRIVER_VERSION "-" __VER__);
  * ================
  *
  * >>> 2023-07-19, Man Hung-Coeng <udc577@126.com>:
- *  01. Create.
+ *  01. Initial commit.
  *
  * >>> 2023-09-03, Man Hung-Coeng <udc577@126.com>:
  *  01. Implement registration and deregistration of USB driver.
@@ -57,5 +57,8 @@ MODULE_VERSION(DRIVER_VERSION "-" __VER__);
  *
  * >>> 2023-12-18, Man Hung-Coeng <udc577@126.com>:
  *  01. Define module version.
+ *
+ * >>> 2026-09-15, Man Hung-Coeng <udc577@126.com>:
+ *  01. Update macro __VER__ to __REVISION__.
  */
 

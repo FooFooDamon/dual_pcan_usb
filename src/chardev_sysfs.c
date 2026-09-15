@@ -1,7 +1,7 @@
 /*
  * Sysfs mechanism.
  *
- * Copyright (c) 2023-2024 Man Hung-Coeng <udc577@126.com>
+ * Copyright (c) 2023-2026 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
@@ -25,7 +25,7 @@ static ssize_t version_show(struct class *cls, struct class_attribute *attr, cha
 static ssize_t version_show(const struct class *cls, const struct class_attribute *attr, char *buf)
 #endif
 {
-    return sprintf(buf, "%s\n", DRIVER_VERSION "-" __VER__);
+    return sprintf(buf, "%s\n", DRIVER_VERSION "-" __REVISION__);
 }
 
 static const struct class_attribute S_CLASS_ATTRS[] = {
@@ -141,7 +141,7 @@ static DEVICE_ATTR_RO(adapter_name);
 
 static ssize_t adapter_version_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    return sprintf(buf, "%s\n", DRIVER_VERSION "-" __VER__);
+    return sprintf(buf, "%s\n", DRIVER_VERSION "-" __REVISION__);
 }
 
 static DEVICE_ATTR_RO(adapter_version);
@@ -184,5 +184,8 @@ const struct attribute** pcan_device_attributes(void)
  *
  * >>> 2024-06-22, Man Hung-Coeng <udc577@126.com>:
  *  01. Fix the compilation error of version_show() on kernel 6.4.0 and above.
+ *
+ * >>> 2026-09-15, Man Hung-Coeng <udc577@126.com>:
+ *  01. Update macro __VER__ to __REVISION__.
  */
 

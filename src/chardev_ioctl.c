@@ -3,7 +3,7 @@
 /*
  * Implementation of chardev ioctl.
  *
- * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
+ * Copyright (c) 2023-2026 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
@@ -130,7 +130,7 @@ DECLARE_IOCTL_HANDLE_FUNC(get_diagnostic_info)
         .read_count = dev->rx_packets,
         /* TODO: Use other fields in future. */
         .open_paths = atomic_read(&dev->open_count),
-        .version = { DRIVER_VERSION "-" __VER__ },
+        .version = { DRIVER_VERSION "-" __REVISION__ },
     };
 
     return __copy_to_user(arg, &diag, sizeof(diag)) ? -EFAULT : 0;
@@ -537,7 +537,7 @@ const ioctl_handler_t G_FD_IOCTL_HANDLERS[] = {
  * ================
  *
  * >>> 2023-12-12, Man Hung-Coeng <udc577@126.com>:
- *  01. Create.
+ *  01. Initial commit.
  *
  * >>> 2023-12-23, Man Hung-Coeng <udc577@126.com>:
  *  01. Implement the timestamp calculation for ioctl message reception.
@@ -545,5 +545,8 @@ const ioctl_handler_t G_FD_IOCTL_HANDLERS[] = {
  * >>> 2023-12-28, Man Hung-Coeng <udc577@126.com>:
  *  01. Optimize the logic of fetching the counter of unread messages,
  *      which can avoid missing some messages due to the old value of counter.
+ *
+ * >>> 2026-09-15, Man Hung-Coeng <udc577@126.com>:
+ *  01. Update macro __VER__ to __REVISION__.
  */
 

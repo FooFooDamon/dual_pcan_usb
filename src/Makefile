@@ -11,7 +11,7 @@
 # NOTE: Some paths must be absolute paths while some mustn't, and the rest don't care.
 LAZY_CODING_DIR := ../3rdparty/lazy_coding
 export LAZY_CODING_ABSDIR ?= $(abspath ${LAZY_CODING_DIR})
-export LAZY_CODING_MAKEFILES ?= $(addprefix ${LAZY_CODING_ABSDIR}/makefiles/, __ver__.mk linux_driver.mk)
+export LAZY_CODING_MAKEFILES ?= $(addprefix ${LAZY_CODING_ABSDIR}/makefiles/, __revision__.mk linux_driver.mk)
 
 ifeq ($(shell [ true $(foreach i, ${LAZY_CODING_MAKEFILES}, -a -s ${i}) ] && echo 1 || echo 0),0)
 
@@ -30,7 +30,7 @@ else
 
 all: dependencies
 
-export EVAL_VERSION_ONCE ?= Y
+export EVAL_REVISION_ONCE ?= Y
 export NO_PRIV_STUFF := $(strip $(filter-out n N no NO No 0, ${NO_PRIV_STUFF}))
 
 # export ARCH := aarch64
@@ -104,7 +104,7 @@ dkms_purge:
 
 endif
 
-export DEPENDENCY_DIRS ?= $(abspath ../3rdparty)
+DEPENDENCY_DIRS ?= $(abspath ../3rdparty)
 
 dependencies:
 	@for i in ${DEPENDENCY_DIRS}; \

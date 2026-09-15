@@ -3,7 +3,7 @@
 /*
  * The application for setting and testing Dual-interface PCAN-USB driver.
  *
- * Copyright (c) 2023 Man Hung-Coeng <udc577@126.com>
+ * Copyright (c) 2023-2026 Man Hung-Coeng <udc577@126.com>
  * All rights reserved.
 */
 
@@ -171,7 +171,7 @@ static void parse_command_line(int argc, char **argv, cmdline_params_t *cmdl_par
             break;
 
         case 'v':
-            fprintf(stdout, APP_VERSION "-" __VER__ "\n");
+            fprintf(stdout, APP_VERSION "-" __REVISION__ "\n");
             exit(EXIT_SUCCESS);
 
         case '?':
@@ -353,7 +353,7 @@ int main(int argc, char **argv)
  * ================
  *
  * >>> 2023-07-19, Man Hung-Coeng <udc577@126.com>:
- *  01. Create.
+ *  01. Initial commit.
  *
  * >>> 2023-10-05, Man Hung-Coeng <udc577@126.com>:
  *  01. Change license to GPL-2.0.
@@ -364,5 +364,8 @@ int main(int argc, char **argv)
  * >>> 2023-12-28, Man Hung-Coeng <udc577@126.com>:
  *  01. Remove recv and send commands,
  *      and add nop, read (implemented) and write commands.
+ *
+ * >>> 2026-09-15, Man Hung-Coeng <udc577@126.com>:
+ *  01. Update macro __VER__ to __REVISION__.
  */
 
